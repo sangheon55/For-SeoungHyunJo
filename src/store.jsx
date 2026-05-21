@@ -22,13 +22,8 @@ const defaultData = {
     { id: 'e1', name: '1차 시험(PSAT)', date: '2027-03-06' },
     { id: 'e2', name: '원서 접수 마감', date: '2027-01-20' },
   ],
-  customEncouragements: [],
   dayNotes: {},     // { 'YYYY-MM-DD': '하루 돌아보기 메모' }
-  certs: {
-    english: { kind: 'TOEIC', score: '', validUntil: '' },
-    history: { level: '', acquired: '' },
-  },
-  settings: { dailyGoalMin: 510 }, // 8.5시간
+  settings: { dailyGoalMin: 510, weeklyGoalMin: 3060 }, // 하루 8.5시간 · 주 51시간
 }
 
 // 새 버전에서 추가된 키를 기존 데이터에 채워 넣는다(주간 업데이트 호환).
@@ -37,7 +32,6 @@ function mergeDefaults(loaded) {
   return {
     ...defaultData,
     ...loaded,
-    certs: { ...defaultData.certs, ...(loaded.certs || {}) },
     settings: { ...defaultData.settings, ...(loaded.settings || {}) },
   }
 }

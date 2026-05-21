@@ -68,6 +68,7 @@ function createWindow() {
     minHeight: 640,
     backgroundColor: '#F1F8E9',
     title: '조성현 합격 플래너',
+    icon: path.join(__dirname, 'icon.ico'),
     autoHideMenuBar: true,
     webPreferences: {
       contextIsolation: true,

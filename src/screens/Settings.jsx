@@ -13,8 +13,6 @@ export default function Settings() {
   // 시험일 폼
   const [eName, setEName] = useState('')
   const [eDate, setEDate] = useState('')
-  // 응원 문구 폼
-  const [cheer, setCheer] = useState('')
   // 데이터 파일 경로
   const [filePath, setFilePath] = useState('')
 
@@ -49,22 +47,13 @@ export default function Settings() {
   const delExam = (id) =>
     update((d) => ({ ...d, examDates: d.examDates.filter((e) => e.id !== id) }))
 
-  const addCheer = () => {
-    const v = cheer.trim()
-    if (!v) return
-    update((d) => ({ ...d, customEncouragements: [...(d.customEncouragements || []), v] }))
-    setCheer('')
-    show('응원 문구를 추가했어요 💌')
-  }
-  const delCheer = (i) =>
-    update((d) => ({ ...d, customEncouragements: d.customEncouragements.filter((_, idx) => idx !== i) }))
-
   const goalHours = (data.settings.dailyGoalMin || 510) / 60
   const setGoal = (h) =>
     update((d) => ({ ...d, settings: { ...d.settings, dailyGoalMin: Math.round(Number(h) * 60) } }))
 
-  const setCert = (group, patch) =>
-    update((d) => ({ ...d, certs: { ...d.certs, [group]: { ...d.certs[group], ...patch } } }))
+  const weekGoalHours = (data.settings.weeklyGoalMin || 3060) / 60
+  const setWeekGoal = (h) =>
+    update((d) => ({ ...d, settings: { ...d.settings, weeklyGoalMin: Math.round(Number(h) * 60) } }))
 
   const doExport = async () => {
     const ok = await exportData()
@@ -79,7 +68,7 @@ export default function Settings() {
   return (
     <div>
       <div className="page-title">설정</div>
-      <div className="page-sub">과목·시험일·응원 문구를 관리하세요 ⚙️</div>
+      <div className="page-sub">과목·시험일·목표 공부 시간을 관리하세요 ⚙️</div>
 
       {/* 과목 */}
       <div className="card" style={{ marginBottom: 16 }}>
@@ -159,57 +148,17 @@ export default function Settings() {
           <div className="hint section-gap">대시보드·타이머의 달성률 계산에 쓰입니다.</div>
         </div>
 
-        {/* 검정시험 */}
+        {/* 주 목표 */}
         <div className="card">
-          <div className="card-title">🏅 검정시험</div>
-          <div className="row" style={{ marginBottom: 8 }}>
-            <label className="fld" style={{ flex: 1 }}>
-              영어 점수
-              <input
-                type="text" value={data.certs.english.score}
-                onChange={(e) => setCert('english', { score: e.target.value })}
-                placeholder="예: TOEIC 845"
-              />
-            </label>
-            <label className="fld" style={{ flex: 1 }}>
-              유효기간
-              <input
-                type="date" value={data.certs.english.validUntil}
-                onChange={(e) => setCert('english', { validUntil: e.target.value })}
-              />
-            </label>
-          </div>
+          <div className="card-title">📆 주 목표 공부 시간</div>
           <label className="fld">
-            한국사능력검정 등급
+            한 주 목표 (시간)
             <input
-              type="text" value={data.certs.history.level}
-              onChange={(e) => setCert('history', { level: e.target.value })}
-              placeholder="예: 1급 (또는 미취득)"
+              type="number" min={1} max={120} step={0.5}
+              value={weekGoalHours} onChange={(e) => setWeekGoal(e.target.value)} style={{ width: 110 }}
             />
           </label>
-        </div>
-      </div>
-
-      {/* 응원 문구 */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-title">💌 나만의 응원 문구</div>
-        <div className="hint" style={{ marginBottom: 8 }}>
-          기본 문구 외에 직접 추가한 문구도 매일 순환에 포함됩니다.
-        </div>
-        {(data.customEncouragements || []).map((c, i) => (
-          <div className="item" key={i}>
-            <span className="grow">{c}</span>
-            <button className="btn danger sm" onClick={() => delCheer(i)}>삭제</button>
-          </div>
-        ))}
-        <div className="row section-gap">
-          <input
-            type="text" style={{ flex: 1 }} value={cheer}
-            onChange={(e) => setCheer(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && addCheer()}
-            placeholder="성현이에게 해주고 싶은 응원 한마디"
-          />
-          <button className="btn" onClick={addCheer}>+ 추가</button>
+          <div className="hint section-gap">통계의 이번 주 목표 달성률 계산에 쓰입니다.</div>
         </div>
       </div>
 

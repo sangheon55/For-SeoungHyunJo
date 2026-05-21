@@ -73,6 +73,8 @@ export default function Stats() {
   const studyDays = new Set(ss.filter((s) => s.seconds > 0).map((s) => s.date)).size
   const avg = studyDays > 0 ? totalSec / studyDays : 0
   const goalSec = (data.settings.dailyGoalMin || 510) * 60
+  const weekGoalSec = (data.settings.weeklyGoalMin || 3060) * 60
+  const weekGoalPct = Math.round((thisWeek / weekGoalSec) * 100)
 
   // 오늘 공부 비율 (과목별)
   const todayPie = data.subjects
@@ -106,6 +108,7 @@ export default function Stats() {
         <div className="chip">📅 공부한 날 <b>{studyDays}</b>일</div>
         <div className="chip">⏱ 총 학습 <b>{Math.floor(totalSec / 3600)}</b>시간</div>
         <div className="chip">📌 일평균 <b>{hm(avg)}</b></div>
+        <div className="chip">🎯 이번 주 목표 <b>{weekGoalPct}%</b></div>
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>
@@ -116,8 +119,8 @@ export default function Stats() {
           <div className="pie-wrap">
             <div className="pie" style={{ background: pieBg }}>
               <div className="pie-hole">
-                <b>{hm(pieTotal)}</b>
                 <span>오늘 총</span>
+                <b>{hm(pieTotal)}</b>
               </div>
             </div>
             <div className="pie-legend">

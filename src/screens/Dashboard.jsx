@@ -8,8 +8,7 @@ export default function Dashboard({ go }) {
   const { data, update } = useStore()
   const today = dateStr()
 
-  const allCheers = [...encouragements, ...(data.customEncouragements || [])]
-  const cheer = pickEncouragement(allCheers, today)
+  const cheer = pickEncouragement(encouragements, today)
 
   const sessions = data.sessions
   const totalHours = sessions.reduce((a, s) => a + s.seconds, 0) / 3600
