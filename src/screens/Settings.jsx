@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useStore, uid } from '../store.jsx'
 import { CATEGORIES, PALETTE, useToast } from '../components/ui.jsx'
-import { STAGES, TREE_TOTAL, treeInfo, dateStr } from '../lib/util.js'
 
 export default function Settings() {
   const { data, update, exportData, importData, isElectron } = useStore()
@@ -76,34 +75,6 @@ export default function Settings() {
     const ok = await importData()
     show(ok ? '데이터를 가져왔어요 📥' : '가져오기를 취소했어요')
   }
-
-  // ── 🛠 개발용: 나무 단계 미리보기 (배포 전 삭제) ──────────────
-  const devTree = treeInfo(data.sessions.reduce((a, s) => a + s.seconds, 0) / 3600)
-  const applyDemo = (hours) =>
-    update((d) => ({
-      ...d,
-      // 실제 세션을 처음 한 번만 백업해 둔다
-      __devBackup: d.__devBackup === undefined ? d.sessions : d.__devBackup,
-      sessions: [
-        {
-          id: 'demo-tree',
-          subjectId: d.subjects[0]?.id || 's1',
-          date: dateStr(),
-          seconds: Math.round(hours * 3600),
-          mock: false,
-        },
-      ],
-    }))
-  const applyDemoAndToast = (hours, label) => {
-    applyDemo(hours)
-    show(`데모 적용: ${label} 🌳`)
-  }
-  const resetDemo = () =>
-    update((d) => {
-      if (d.__devBackup === undefined) return d
-      const { __devBackup, ...rest } = d
-      return { ...rest, sessions: __devBackup }
-    })
 
   return (
     <div>
@@ -261,67 +232,6 @@ export default function Settings() {
         </div>
         <div className="hint section-gap">
           다른 PC로 옮길 때: 내보내기 → 파일 전달 → 새 PC에서 가져오기
-        </div>
-      </div>
-
-      {/* 🛠 개발용 — 나무 단계 미리보기 (임시, 배포 전 이 카드 삭제) */}
-      <div className="card" style={{ marginTop: 16, border: '2px dashed #c0392b' }}>
-        <div className="card-title" style={{ color: '#c0392b' }}>
-          🛠 개발용 — 나무 단계 미리보기 (임시)
-        </div>
-        <div className="hint" style={{ marginBottom: 8 }}>
-          버튼을 누르면 학습 세션이 데모 값으로 바뀌어 대시보드·나의 숲의 나무가
-          해당 단계로 보입니다. 실제 기록은 처음 한 번 자동 백업되며 '원래대로'로
-          복구됩니다. <b>배포 전 이 카드는 삭제하세요.</b>
-        </div>
-        <div className="hint" style={{ marginBottom: 10 }}>
-          현재: {devTree.stage.emoji} {devTree.stage.name} · Lv.{devTree.level} ·
-          완성 큰나무 {devTree.completed}그루 · 누적 {Math.floor(devTree.totalHours)}시간
-          {data.__devBackup !== undefined && (
-            <b style={{ color: '#c0392b' }}> · (데모 데이터 적용 중)</b>
-          )}
-        </div>
-        <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
-          {STAGES.map((s) => (
-            <button
-              key={s.name}
-              className="btn ghost sm"
-              onClick={() => applyDemoAndToast(s.at + 1, s.name)}
-            >
-              {s.emoji} {s.name}
-            </button>
-          ))}
-        </div>
-        <div className="row" style={{ flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
-          <button
-            className="btn sm"
-            onClick={() => applyDemoAndToast(TREE_TOTAL - 10, '큰나무 완성 직전')}
-          >
-            🌲 완성 직전
-          </button>
-          <button
-            className="btn sm"
-            onClick={() => applyDemoAndToast(TREE_TOTAL, '큰나무 1그루 완성')}
-          >
-            🌲 1그루 완성
-          </button>
-          <button
-            className="btn sm"
-            onClick={() => applyDemoAndToast(TREE_TOTAL * 2, '큰나무 2그루')}
-          >
-            🌲🌲 2그루
-          </button>
-          <button
-            className="btn sm"
-            onClick={() => applyDemoAndToast(TREE_TOTAL * 6, '큰나무 6그루 숲')}
-          >
-            🌲×6 숲
-          </button>
-        </div>
-        <div className="row section-gap">
-          <button className="btn danger sm" onClick={resetDemo}>
-            ↩ 원래대로 (실제 기록 복구)
-          </button>
         </div>
       </div>
 
