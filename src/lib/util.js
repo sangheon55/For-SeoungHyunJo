@@ -44,6 +44,18 @@ export function hm(totalSec) {
   if (h === 0) return `${m}분`
   return `${h}시간 ${m}분`
 }
+// 시각을 "HH:MM"으로
+export function clockHM(d = new Date()) {
+  const x = new Date(d)
+  return `${String(x.getHours()).padStart(2, '0')}:${String(x.getMinutes()).padStart(2, '0')}`
+}
+// "HH:MM" → 자정 기준 분(없으면 null)
+export function hmToMin(hhmm) {
+  if (!hhmm || !hhmm.includes(':')) return null
+  const [h, m] = hhmm.split(':').map(Number)
+  if (Number.isNaN(h) || Number.isNaN(m)) return null
+  return h * 60 + m
+}
 
 // ── 학습 세션 집계 ───────────────────────────────────────────
 export function sumSeconds(sessions, predicate) {
@@ -72,15 +84,15 @@ export function streak(sessions) {
 }
 
 // ── 나무 성장 ────────────────────────────────────────────────
-export const TREE_TOTAL = 3650 // 큰나무 완성까지 누적 시간
+export const TREE_TOTAL = 1800 // 큰나무 완성까지 누적 시간
 export const STAGES = [
   { name: '씨앗', emoji: '🌰', at: 0 },
-  { name: '새싹', emoji: '🌱', at: 50 },
-  { name: '떡잎', emoji: '🌿', at: 150 },
-  { name: '묘목', emoji: '🪴', at: 350 },
-  { name: '어린나무', emoji: '🌳', at: 750 },
-  { name: '청년나무', emoji: '🌳', at: 1450 },
-  { name: '우거진나무', emoji: '🌲', at: 2450 },
+  { name: '새싹', emoji: '🌱', at: 25 },
+  { name: '떡잎', emoji: '🌿', at: 75 },
+  { name: '묘목', emoji: '🪴', at: 175 },
+  { name: '어린나무', emoji: '🌳', at: 375 },
+  { name: '청년나무', emoji: '🌳', at: 720 },
+  { name: '우거진나무', emoji: '🌲', at: 1200 },
 ]
 
 export function treeInfo(totalHours) {

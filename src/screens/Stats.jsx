@@ -22,11 +22,13 @@ function Compare({ label, cur, prev, unit }) {
   )
 }
 
-const grassColor = (sec) => {
+// 일일 목표 공부 시간 대비 달성 비율로 잔디 색을 정한다
+const grassColor = (sec, goalSec) => {
   if (sec <= 0) return '#e8f5e9'
-  if (sec < 3600) return '#c8e6c9'
-  if (sec < 10800) return '#81c784'
-  if (sec < 18000) return '#43a047'
+  const pct = sec / goalSec
+  if (pct < 0.5) return '#c8e6c9'
+  if (pct < 0.8) return '#81c784'
+  if (pct < 1) return '#43a047'
   return '#1b5e20'
 }
 
@@ -70,6 +72,22 @@ export default function Stats() {
   const totalSec = ss.reduce((a, s) => a + s.seconds, 0)
   const studyDays = new Set(ss.filter((s) => s.seconds > 0).map((s) => s.date)).size
   const avg = studyDays > 0 ? totalSec / studyDays : 0
+  const goalSec = (data.settings.dailyGoalMin || 510) * 60
+
+  // 오늘 공부 비율 (과목별)
+  const todayPie = data.subjects
+    .map((s) => ({ ...s, sec: sumWhere(ss, (x) => x.subjectId === s.id && x.date === today) }))
+    .filter((s) => s.sec > 0)
+    .sort((a, b) => b.sec - a.sec)
+  const pieTotal = todayPie.reduce((a, s) => a + s.sec, 0)
+  let pieAcc = 0
+  const pieStops = todayPie.map((s) => {
+    const from = (pieAcc / pieTotal) * 100
+    pieAcc += s.sec
+    const to = (pieAcc / pieTotal) * 100
+    return `${s.color} ${from}% ${to}%`
+  })
+  const pieBg = pieStops.length ? `conic-gradient(${pieStops.join(', ')})` : null
 
   return (
     <div>
@@ -91,18 +109,46 @@ export default function Stats() {
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-title">🍩 오늘 공부 비율</div>
+        {!pieBg ? (
+          <div className="empty">오늘 학습 기록이 없어요.</div>
+        ) : (
+          <div className="pie-wrap">
+            <div className="pie" style={{ background: pieBg }}>
+              <div className="pie-hole">
+                <b>{hm(pieTotal)}</b>
+                <span>오늘 총</span>
+              </div>
+            </div>
+            <div className="pie-legend">
+              {todayPie.map((s) => (
+                <div className="pie-leg" key={s.id}>
+                  <span className="dot" style={{ background: s.color }} />
+                  <span className="grow">{s.name}</span>
+                  <b style={{ color: s.color }}>{Math.round((s.sec / pieTotal) * 100)}%</b>
+                  <span className="hint" style={{ width: 84, textAlign: 'right' }}>{hm(s.sec)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-title">🌱 학습 잔디 (최근 17주)</div>
         <div className="grass">
           {days.map((x) => (
             <div
               className="cell"
               key={x.d}
-              title={`${x.d} · ${hm(x.sec)}`}
-              style={{ background: grassColor(x.sec) }}
+              title={`${x.d} · ${hm(x.sec)} · 목표 ${Math.round((x.sec / goalSec) * 100)}%`}
+              style={{ background: grassColor(x.sec, goalSec) }}
             />
           ))}
         </div>
-        <div className="hint" style={{ marginTop: 8 }}>진할수록 그날 많이 공부한 거예요.</div>
+        <div className="hint" style={{ marginTop: 8 }}>
+          일일 목표({hm(goalSec)}) 대비 달성률이 높을수록 진해져요.
+        </div>
       </div>
 
       <div className="card">

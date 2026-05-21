@@ -39,7 +39,7 @@ export default function Forest() {
                 ))}
               </div>
               <div className="hint" style={{ marginTop: 10 }}>
-                완성한 큰나무 {tree.completed}그루 — 정말 대단해요, 성현아!
+                완성한 큰나무 {tree.completed}그루 — 정말 대단해, 성현아!
               </div>
             </>
           )}

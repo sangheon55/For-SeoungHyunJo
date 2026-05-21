@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useStore, uid } from '../store.jsx'
-import { dateStr, addDays, prettyDate, hm } from '../lib/util.js'
+import { dateStr, addDays, prettyDate, hm, hmToMin } from '../lib/util.js'
 import { getSubject, SubjectTag } from '../components/ui.jsx'
 
 export default function Planner() {
@@ -12,6 +12,14 @@ export default function Planner() {
   const dayTasks = data.tasks.filter((t) => t.date === date)
   const daySessions = data.sessions.filter((s) => s.date === date)
   const studied = daySessions.reduce((a, s) => a + s.seconds, 0)
+
+  // 시작 시각순 오름차순 정렬 (시각 없는 옛 기록은 맨 뒤로)
+  const sortedSessions = [...daySessions].sort((a, b) => {
+    const am = hmToMin(a.start) ?? 99999
+    const bm = hmToMin(b.start) ?? 99999
+    if (am !== bm) return am - bm
+    return (hmToMin(a.end) ?? 99999) - (hmToMin(b.end) ?? 99999)
+  })
 
   const addTask = () => {
     const v = text.trim()
@@ -29,10 +37,70 @@ export default function Planner() {
 
   const done = dayTasks.filter((t) => t.done).length
 
+  // ── 학습 기록(타임라인) 직접 추가·수정 ──────────────────────
+  const [mSubject, setMSubject] = useState(data.subjects[0]?.id || '')
+  const [mStart, setMStart] = useState('')
+  const [mEnd, setMEnd] = useState('')
+  const [editId, setEditId] = useState(null)
+
+  const resetForm = () => {
+    setMStart('')
+    setMEnd('')
+    setEditId(null)
+  }
+  const saveSession = () => {
+    const sm = hmToMin(mStart)
+    const em = hmToMin(mEnd)
+    if (sm == null || em == null) {
+      window.alert('시작·종료 시간을 입력해 주세요.')
+      return
+    }
+    if (em - sm <= 0) {
+      window.alert('종료 시간이 시작 시간보다 늦어야 해요.')
+      return
+    }
+    const secs = (em - sm) * 60
+    if (editId) {
+      update((d) => ({
+        ...d,
+        sessions: d.sessions.map((s) =>
+          s.id === editId
+            ? { ...s, subjectId: mSubject, start: mStart, end: mEnd, seconds: secs, manual: true }
+            : s,
+        ),
+      }))
+    } else {
+      update((d) => ({
+        ...d,
+        sessions: [
+          ...d.sessions,
+          { id: uid(), subjectId: mSubject, date, start: mStart, end: mEnd, seconds: secs, manual: true, mock: false },
+        ],
+      }))
+    }
+    resetForm()
+  }
+  const editSession = (s) => {
+    setEditId(s.id)
+    setMSubject(s.subjectId || data.subjects[0]?.id || '')
+    setMStart(s.start || '')
+    setMEnd(s.end || '')
+  }
+  const delSession = (id) => {
+    if (!window.confirm('이 학습 기록을 삭제할까요?')) return
+    update((d) => ({ ...d, sessions: d.sessions.filter((s) => s.id !== id) }))
+    if (editId === id) resetForm()
+  }
+
+  // ── 하루 돌아보기 메모 ──────────────────────────────────────
+  const dayNote = (data.dayNotes && data.dayNotes[date]) || ''
+  const setDayNote = (v) =>
+    update((d) => ({ ...d, dayNotes: { ...(d.dayNotes || {}), [date]: v } }))
+
   return (
     <div>
       <div className="page-title">플래너</div>
-      <div className="page-sub">하루하루 할 일을 계획하고 체크하세요 📅</div>
+      <div className="page-sub">하루하루 할 일을 계획하고, 공부 동선을 기록하세요 📅</div>
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="flex-between">
@@ -74,7 +142,7 @@ export default function Planner() {
         </div>
       </div>
 
-      <div className="card">
+      <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-title">{prettyDate(date)} 할 일</div>
         {dayTasks.length === 0 && <div className="empty">할 일이 없어요. 위에서 추가해 보세요.</div>}
         {dayTasks.map((t) => (
@@ -85,6 +153,100 @@ export default function Planner() {
             <button className="btn danger sm" onClick={() => del(t.id)}>삭제</button>
           </div>
         ))}
+      </div>
+
+      {/* ── 학습 타임라인 ──────────────────────────────────── */}
+      <div className="card">
+        <div className="flex-between">
+          <div className="card-title" style={{ marginBottom: 0 }}>🕒 학습 타임라인</div>
+          <span className="hint">총 공부 {hm(studied)}</span>
+        </div>
+
+        <div className="timeline" style={{ marginTop: 12 }}>
+          {sortedSessions.length === 0 && (
+            <div className="empty">이 날의 학습 기록이 없어요. 아래에서 직접 추가할 수 있어요.</div>
+          )}
+          {sortedSessions.map((s, i) => {
+            const subj = getSubject(data, s.subjectId)
+            const prev = sortedSessions[i - 1]
+            const gap =
+              prev && prev.end && s.start ? hmToMin(s.start) - hmToMin(prev.end) : null
+            return (
+              <React.Fragment key={s.id}>
+                {gap != null && gap > 0 && (
+                  <div className="tl-break">☕ 휴식 {hm(gap * 60)}</div>
+                )}
+                <div className="tl-row">
+                  <div className="tl-time">
+                    {s.start || '--:--'}
+                    <br />
+                    {s.end || '--:--'}
+                  </div>
+                  <div className="tl-bar" style={{ background: subj?.color || '#9aa' }} />
+                  <div className="tl-body">
+                    <div className="tl-name">
+                      {subj?.name || '미지정'}
+                      {s.manual && <span className="tl-manual">✋ 직접입력</span>}
+                    </div>
+                    <div className="tl-dur">{hm(s.seconds)}</div>
+                  </div>
+                  <div className="tl-actions">
+                    <button className="btn ghost sm" onClick={() => editSession(s)}>수정</button>
+                    <button className="btn danger sm" onClick={() => delSession(s.id)}>삭제</button>
+                  </div>
+                </div>
+              </React.Fragment>
+            )
+          })}
+        </div>
+
+        {/* 직접 추가 / 수정 폼 */}
+        <div className="section-gap" style={{ borderTop: '1px solid var(--line)', paddingTop: 14 }}>
+          <div className="card-title" style={{ fontSize: 13 }}>
+            {editId ? '✏️ 학습 기록 수정' : '✋ 학습 기록 직접 추가'}
+          </div>
+          <div className="row" style={{ alignItems: 'flex-end' }}>
+            <label className="fld">
+              과목
+              <select value={mSubject} onChange={(e) => setMSubject(e.target.value)}>
+                {data.subjects.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="fld">
+              시작
+              <input type="time" value={mStart} onChange={(e) => setMStart(e.target.value)} />
+            </label>
+            <label className="fld">
+              종료
+              <input type="time" value={mEnd} onChange={(e) => setMEnd(e.target.value)} />
+            </label>
+            <button className="btn" onClick={saveSession}>{editId ? '수정 저장' : '+ 추가'}</button>
+            {editId && (
+              <button className="btn ghost" onClick={resetForm}>취소</button>
+            )}
+          </div>
+          <div className="hint section-gap">
+            타이머를 깜빡했거나 기록이 날아갔을 때 직접 입력하세요.
+            직접 입력·수정한 기록은 타임라인에 ✋ 로 표시됩니다.
+          </div>
+        </div>
+      </div>
+
+      {/* ── 하루 돌아보기 메모 ───────────────────────────────── */}
+      <div className="card section-gap">
+        <div className="card-title">📝 오늘 하루 돌아보기</div>
+        <div className="hint" style={{ marginBottom: 8 }}>
+          공부를 마치고 잘된 점·아쉬운 점·내일 계획을 적어보세요. 입력하는 대로 자동 저장됩니다.
+        </div>
+        <textarea
+          rows={5}
+          style={{ width: '100%' }}
+          value={dayNote}
+          placeholder="예: 자료해석 시간 단축 연습함. 상황판단 정답률이 아쉬움. 내일은 기출 2회독 시작."
+          onChange={(e) => setDayNote(e.target.value)}
+        />
       </div>
     </div>
   )

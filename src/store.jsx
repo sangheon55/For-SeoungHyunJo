@@ -15,7 +15,7 @@ const defaultData = {
     { id: 's7', name: '한국사', category: '한국사', color: '#5D4037' },
   ],
   tasks: [],        // { id, date, subjectId, text, done }
-  sessions: [],     // { id, subjectId, date, seconds, mock }
+  sessions: [],     // { id, subjectId, date, seconds, start:'HH:MM', end:'HH:MM', manual, mock }
   memos: [],        // { id, subjectId, title, body, updatedAt }
   reviews: [],      // { id, name, subjectId, totalChapters, doneChapters, targetRounds, round }
   examDates: [
@@ -23,6 +23,7 @@ const defaultData = {
     { id: 'e2', name: '원서 접수 마감', date: '2027-01-20' },
   ],
   customEncouragements: [],
+  dayNotes: {},     // { 'YYYY-MM-DD': '하루 돌아보기 메모' }
   certs: {
     english: { kind: 'TOEIC', score: '', validUntil: '' },
     history: { level: '', acquired: '' },
