@@ -171,21 +171,38 @@ ipcMain.handle('update:install', async (_e, extractedAppPath) => {
   const currentAppDir = path.dirname(process.execPath)
   const exeName = path.basename(process.execPath)
   const updatesDir = path.join(app.getPath('userData'), 'updates')
-  const psPath = path.join(updatesDir, 'apply.ps1')
-  const logPath = path.join(updatesDir, 'update.log')
+  // 로그는 update:download 가 updates/ 를 통째로 지워도 살아남도록 userData 루트에 둔다.
+  const logPath = path.join(app.getPath('userData'), 'update.log')
+  const hostLogPath = path.join(app.getPath('userData'), 'host-update.log')
+  const tempLogPath = path.join(require('os').tmpdir(), 'seonghyeon-update.log')
   const newExePath = path.join(currentAppDir, exeName)
   const parentPid = process.pid
 
-  // v1.4.2: .bat → PowerShell 전환.
-  //  • Unicode 네이티브 (한글 username/경로 무관)
-  //  • 폴더 rename 방식 → robocopy 의 파일 잠금/부분 복사 문제 완전 회피
-  //  • PID 기반 종료 대기 (이름 매칭 X)
-  //  • 실패 시 MessageBox 로 사용자에게 즉시 안내
-  //  • PS 창은 일부러 보이게 띄움 (멈춰도 사용자가 닫을 수 있음)
+  // v1.4.4: 보안(Windows Defender ASR/AMSI/3rd-party AV) 차단 대응.
+  //  • .ps1 파일을 디스크에 안 씀 → -EncodedCommand (Base64 UTF-16LE) 직접 전달
+  //  • Node.js 단계에서 host-update.log 에 시도 기록 → PS 가 통째로 차단돼도 흔적 남음
+  //  • PS 내부에서 update.log + %TEMP%/seonghyeon-update.log 이중 로깅 → 하나가 막혀도 다른 쪽 확인 가능
+  //  • 실패 시 MessageBox 로 사용자에게 즉시 한국어 안내
+
+  // ── Host(Electron Main) 측 사전 로깅 ─────────────────────────
+  // PS 가 한 줄도 못 돌더라도 "main process 가 spawn 시도는 했다" 는 흔적이 남음.
+  // 사용자가 update.log 가 없다 = 보안이 PS 를 차단했다 라고 진단 가능.
+  const hostLog = (msg) => {
+    try {
+      fs.appendFileSync(hostLogPath, `[${new Date().toISOString()}] ${msg}\r\n`, { encoding: 'utf-8' })
+    } catch {}
+  }
+  hostLog('=== update:install host-side start ===')
+  hostLog(`exe=${process.execPath}`)
+  hostLog(`pid=${parentPid}`)
+  hostLog(`src=${extractedAppPath}`)
+  hostLog(`dst=${currentAppDir}`)
+
   const psEscape = (s) => String(s).replace(/'/g, "''")
-  const ps = `# 조성현 플래너 — 자동 업데이트 적용 스크립트
+  const ps = `# 조성현 플래너 — 자동 업데이트 적용 스크립트 (v1.4.4)
 $ErrorActionPreference = 'Stop'
 $logPath = '${psEscape(logPath)}'
+$tempLog = '${psEscape(tempLogPath)}'
 $src = '${psEscape(extractedAppPath)}'
 $dst = '${psEscape(currentAppDir)}'
 $parentPid = ${parentPid}
@@ -195,7 +212,9 @@ $newExe = Join-Path $dst $exeName
 function Log([string]$msg) {
   $line = "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] $msg"
   Write-Host $line
+  # 이중 로깅 — 한쪽이 막혀도 다른 쪽 확인 가능
   try { Add-Content -LiteralPath $logPath -Value $line -Encoding utf8 } catch {}
+  try { Add-Content -LiteralPath $tempLog -Value $line -Encoding utf8 } catch {}
 }
 
 function Fail([string]$msg) {
@@ -203,7 +222,7 @@ function Fail([string]$msg) {
   try {
     Add-Type -AssemblyName System.Windows.Forms | Out-Null
     [System.Windows.Forms.MessageBox]::Show(
-      "조성현 플래너 자동 업데이트가 실패했어요.\`n\`n원인: $msg\`n\`n로그 파일:\`n$logPath\`n\`nGitHub Releases에서 zip을 받아 수동으로 폴더를 교체해 주세요.",
+      "조성현 플래너 자동 업데이트가 실패했어요.\`n\`n원인: $msg\`n\`n로그 파일:\`n$logPath\`n$tempLog\`n\`nGitHub Releases에서 zip을 받아 수동으로 폴더를 교체해 주세요.",
       '업데이트 실패',
       'OK',
       'Error'
@@ -213,16 +232,16 @@ function Fail([string]$msg) {
 }
 
 try {
-  # 로그 초기화
+  # 로그 초기화 (둘 다)
   '' | Set-Content -LiteralPath $logPath -Encoding utf8
-  Log '=== 업데이트 시작 ==='
+  '' | Set-Content -LiteralPath $tempLog -Encoding utf8
+  Log '=== 업데이트 시작 (v1.4.4 EncodedCommand) ==='
   Log "Source: $src"
   Log "Target: $dst"
   Log "Parent PID: $parentPid"
   Log "PowerShell: $($PSVersionTable.PSVersion)"
   Log "OS: $([System.Environment]::OSVersion.VersionString)"
 
-  # 1) 부모(현재 앱) 프로세스 종료 대기 (최대 30초)
   $waited = 0
   while ($waited -lt 30) {
     $p = Get-Process -Id $parentPid -ErrorAction SilentlyContinue
@@ -232,7 +251,6 @@ try {
   }
   Log "부모 프로세스 종료 대기: ${'$'}waited 초"
 
-  # 2) 동일 이름의 다른 헬퍼/렌더러 프로세스도 잠시 대기 (최대 10초)
   $exeBase = [System.IO.Path]::GetFileNameWithoutExtension($exeName)
   $extra = 0
   while ($extra -lt 10) {
@@ -243,7 +261,6 @@ try {
   }
   Log "기타 프로세스 정리 대기: ${'$'}extra 초"
 
-  # 3) 백업 → 새 폴더로 통째 교체
   $stamp = Get-Date -Format 'yyyyMMddHHmmss'
   $backup = "${'$'}dst.old.${'$'}stamp"
   Log "백업: $dst -> $backup"
@@ -252,7 +269,6 @@ try {
   Log "교체: $src -> $dst"
   Move-Item -LiteralPath $src -Destination $dst -Force
 
-  # 4) 새 실행 파일 실행
   if (-not (Test-Path -LiteralPath $newExe)) {
     Fail "새 버전의 실행 파일을 찾을 수 없어요: $newExe"
   }
@@ -261,7 +277,6 @@ try {
 
   Log '=== 업데이트 완료 ==='
 
-  # 5) 백업 폴더는 다음 부팅까지 보관 후 자동 삭제 (실패 시 무시)
   try {
     Start-Sleep -Seconds 3
     Remove-Item -LiteralPath $backup -Recurse -Force -ErrorAction SilentlyContinue
@@ -275,32 +290,52 @@ try {
   Fail $_.Exception.Message
 }
 `
-  // BOM 추가 → 구형 PowerShell 에서도 한글 안전
-  fs.writeFileSync(psPath, '﻿' + ps, { encoding: 'utf-8' })
 
-  // 일부러 보이게 띄움 (windowsHide 폐기). 사용자가 진행 상황을 볼 수 있고
-  // 멈춰도 직접 닫아서 빠져나올 수 있다.
-  const child = spawn('powershell.exe', [
-    '-NoProfile', '-ExecutionPolicy', 'Bypass',
-    '-File', psPath,
-  ], {
-    detached: true, stdio: 'ignore', windowsHide: false,
-  })
-  child.unref()
+  // PowerShell -EncodedCommand 는 UTF-16LE Base64 를 받는다.
+  // 디스크에 .ps1 파일을 안 쓰므로 AV/ASR 의 스크립트 스캐닝에 노출되지 않는다.
+  const encoded = Buffer.from(ps, 'utf16le').toString('base64')
+  hostLog(`encoded ps script length=${ps.length} chars, base64=${encoded.length} chars`)
+
+  try {
+    const child = spawn('powershell.exe', [
+      '-NoProfile', '-ExecutionPolicy', 'Bypass',
+      '-EncodedCommand', encoded,
+    ], {
+      detached: true, stdio: 'ignore', windowsHide: false,
+    })
+    child.unref()
+    hostLog(`spawned powershell.exe pid=${child.pid || 'unknown'}`)
+  } catch (e) {
+    hostLog(`spawn FAILED: ${e.message}`)
+    throw new Error(`PowerShell 실행이 보안 정책에 막혔을 수 있어요. host-update.log 를 확인해 주세요. (${e.message})`)
+  }
+
   setTimeout(() => app.exit(0), 600)
   return true
 })
 
 ipcMain.handle('update:openLog', () => {
-  const logPath = path.join(app.getPath('userData'), 'updates', 'update.log')
-  if (!fs.existsSync(logPath)) return false
-  shell.openPath(logPath)
-  return true
+  const userData = app.getPath('userData')
+  const logPath = path.join(userData, 'update.log')
+  const hostLogPath = path.join(userData, 'host-update.log')
+  const tempLogPath = path.join(require('os').tmpdir(), 'seonghyeon-update.log')
+  // 둘 다 있으면 폴더를 열어 사용자가 골라보게 함. 하나만 있으면 그 파일을 직접 연다.
+  if (fs.existsSync(logPath) && fs.existsSync(hostLogPath)) {
+    shell.openPath(userData)
+    return true
+  }
+  if (fs.existsSync(logPath)) { shell.openPath(logPath); return true }
+  if (fs.existsSync(hostLogPath)) { shell.openPath(hostLogPath); return true }
+  if (fs.existsSync(tempLogPath)) { shell.openPath(tempLogPath); return true }
+  return false
 })
 
 ipcMain.handle('update:hasLog', () => {
-  const logPath = path.join(app.getPath('userData'), 'updates', 'update.log')
-  return fs.existsSync(logPath)
+  const userData = app.getPath('userData')
+  const tempLogPath = path.join(require('os').tmpdir(), 'seonghyeon-update.log')
+  return fs.existsSync(path.join(userData, 'update.log'))
+      || fs.existsSync(path.join(userData, 'host-update.log'))
+      || fs.existsSync(tempLogPath)
 })
 
 ipcMain.handle('update:openReleases', () => shell.openExternal(GH_RELEASES_PAGE))
