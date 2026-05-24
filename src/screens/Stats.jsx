@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useStore } from '../store.jsx'
 import { dateStr, addDays, weekStart, monthKey, hm, inRange, streak } from '../lib/util.js'
+import { computeWeaknessBySubject } from '../lib/ebbinghaus.js'
 
 function sumWhere(sessions, fn) {
   return sessions.reduce((a, s) => (fn(s) ? a + s.seconds : a), 0)
@@ -154,6 +155,8 @@ export default function Stats() {
         </div>
       </div>
 
+      <WeaknessCard data={data} />
+
       <div className="card">
         <div className="flex-between">
           <div className="card-title" style={{ marginBottom: 0 }}>과목별 공부 시간</div>
@@ -179,6 +182,33 @@ export default function Stats() {
           ))}
         </div>
       </div>
+    </div>
+  )
+}
+
+function WeaknessCard({ data }) {
+  const rows = computeWeaknessBySubject(data)
+  const hasAny = rows.some((r) => r.total > 0)
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card-title">🔍 과목별 약점 (오답노트 기반)</div>
+      {!hasAny && (
+        <div className="empty">오답 기록이 없어요. 오답노트에 등록하면 약점이 한눈에 보여요.</div>
+      )}
+      {rows.filter((r) => r.total > 0).map((r) => (
+        <div className="subj-row" key={r.subject.id} style={{ alignItems: 'center' }}>
+          <span className="nm" style={{ color: r.subject.color }}>{r.subject.name}</span>
+          <span className="hint" style={{ flex: 1 }}>
+            오답 {r.total}개
+            {r.active > 0 && ` · 진행 중 ${r.active}`}
+            {r.overdue > 0 && (
+              <span style={{ color: 'var(--danger)', fontWeight: 700 }}> · 미완료 {r.overdue}</span>
+            )}
+            {r.mastered > 0 && ` · 완료 ${r.mastered}`}
+            {r.accuracy !== null && ` · 정답률 ${Math.round(r.accuracy * 100)}%`}
+          </span>
+        </div>
+      ))}
     </div>
   )
 }

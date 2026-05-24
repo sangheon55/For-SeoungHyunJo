@@ -4,6 +4,7 @@ import Planner from './screens/Planner.jsx'
 import Timer from './screens/Timer.jsx'
 import Memos from './screens/Memos.jsx'
 import Reviews from './screens/Reviews.jsx'
+import WrongNotes from './screens/WrongNotes.jsx'
 import Stats from './screens/Stats.jsx'
 import Forest from './screens/Forest.jsx'
 import Settings from './screens/Settings.jsx'
@@ -14,6 +15,7 @@ const NAV = [
   { id: 'timer', label: '학습 타이머', ico: '⏱️', C: Timer },
   { id: 'memos', label: '과목 메모', ico: '📝', C: Memos },
   { id: 'reviews', label: '회독 관리', ico: '📚', C: Reviews },
+  { id: 'wrong', label: '오답노트', ico: '❌', C: WrongNotes },
   { id: 'stats', label: '통계', ico: '📊', C: Stats },
   { id: 'forest', label: '나의 숲', ico: '🌲', C: Forest },
   { id: 'settings', label: '설정', ico: '⚙️', C: Settings },

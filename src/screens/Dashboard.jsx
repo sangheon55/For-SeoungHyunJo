@@ -3,6 +3,7 @@ import { useStore } from '../store.jsx'
 import { dateStr, addDays, prettyDate, dDay, hm, streak, treeInfo } from '../lib/util.js'
 import { encouragements, pickEncouragement } from '../data/encouragements.js'
 import { getSubject, SubjectTag } from '../components/ui.jsx'
+import { dueToday } from '../lib/ebbinghaus.js'
 
 export default function Dashboard({ go }) {
   const { data, update } = useStore()
@@ -27,6 +28,8 @@ export default function Dashboard({ go }) {
   const ddays = [...data.examDates]
     .map((e) => ({ ...e, d: dDay(e.date) }))
     .sort((a, b) => a.d - b.d)
+
+  const wrongDueCount = dueToday(data.wrongAnswers || [], today).length
 
   const toggleTask = (id) =>
     update((d) => ({ ...d, tasks: d.tasks.map((t) => (t.id === id ? { ...t, done: !t.done } : t)) }))
@@ -85,6 +88,15 @@ export default function Dashboard({ go }) {
         <div className="chip">⏱ 오늘 공부량 <b>{hm(todaySec)}</b></div>
         <div className="chip">🎯 오늘 목표 달성 <b>{goalPct}</b>%</div>
         <div className="chip">✅ 오늘 할 일 <b>{doneCount}/{todayTasks.length}</b></div>
+        {wrongDueCount > 0 && (
+          <button
+            className="chip"
+            onClick={() => go('wrong')}
+            style={{ cursor: 'pointer', border: 'none', background: '#fff3cd', color: '#7a5a00' }}
+          >
+            📝 오늘 복습 <b>{wrongDueCount}</b>개
+          </button>
+        )}
       </div>
 
       {/* 오늘 할 일 */}

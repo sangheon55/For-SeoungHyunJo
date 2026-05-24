@@ -18,12 +18,17 @@ const defaultData = {
   sessions: [],     // { id, subjectId, date, seconds, start:'HH:MM', end:'HH:MM', manual, mock }
   memos: [],        // { id, subjectId, title, body, updatedAt }
   reviews: [],      // { id, name, subjectId, totalChapters, doneChapters, targetRounds, round }
+  wrongAnswers: [], // 오답노트 — 자세한 스키마는 lib/ebbinghaus.js 참고
   examDates: [
     { id: 'e1', name: '1차 시험(PSAT)', date: '2027-03-06' },
     { id: 'e2', name: '원서 접수 마감', date: '2027-01-20' },
   ],
   dayNotes: {},     // { 'YYYY-MM-DD': '하루 돌아보기 메모' }
   settings: { dailyGoalMin: 510, weeklyGoalMin: 3060 }, // 하루 8.5시간 · 주 51시간
+  wrongSettings: {
+    intervals: [1, 3, 7, 14, 30], // 에빙하우스 5단계(일)
+    resetOnMiss: true,            // 틀리면 1단계로 리셋
+  },
 }
 
 // 새 버전에서 추가된 키를 기존 데이터에 채워 넣는다(주간 업데이트 호환).
@@ -33,6 +38,8 @@ function mergeDefaults(loaded) {
     ...defaultData,
     ...loaded,
     settings: { ...defaultData.settings, ...(loaded.settings || {}) },
+    wrongSettings: { ...defaultData.wrongSettings, ...(loaded.wrongSettings || {}) },
+    wrongAnswers: Array.isArray(loaded?.wrongAnswers) ? loaded.wrongAnswers : [],
   }
 }
 const clone = (o) => JSON.parse(JSON.stringify(o))
