@@ -171,52 +171,122 @@ ipcMain.handle('update:install', async (_e, extractedAppPath) => {
   const currentAppDir = path.dirname(process.execPath)
   const exeName = path.basename(process.execPath)
   const updatesDir = path.join(app.getPath('userData'), 'updates')
-  const batPath = path.join(updatesDir, 'apply.bat')
+  const psPath = path.join(updatesDir, 'apply.ps1')
   const logPath = path.join(updatesDir, 'update.log')
   const newExePath = path.join(currentAppDir, exeName)
+  const parentPid = process.pid
 
-  // robocopy /MIR : 거울 복사. exit code 0~7은 성공, 8 이상이 실패.
-  // 안전성 강화:
-  //  • tasklist 폴링으로 .exe 가 실제 종료될 때까지 최대 30초 대기
-  //  • /R:5 /W:1 로 robocopy 재시도 제한 (기본은 100만회 × 30초로 사실상 무한 대기)
-  //  • pause 제거 → 결과는 update.log 에 기록 (cmd 창이 숨겨져 있어 pause 가 영구 정지의 원인)
-  const bat = `@echo off
-chcp 65001 >nul
-set "LOG=${logPath}"
-echo === %date% %time% 업데이트 시작 ===> "%LOG%"
-echo SRC=${extractedAppPath}>> "%LOG%"
-echo DST=${currentAppDir}>> "%LOG%"
+  // v1.4.2: .bat → PowerShell 전환.
+  //  • Unicode 네이티브 (한글 username/경로 무관)
+  //  • 폴더 rename 방식 → robocopy 의 파일 잠금/부분 복사 문제 완전 회피
+  //  • PID 기반 종료 대기 (이름 매칭 X)
+  //  • 실패 시 MessageBox 로 사용자에게 즉시 안내
+  //  • PS 창은 일부러 보이게 띄움 (멈춰도 사용자가 닫을 수 있음)
+  const psEscape = (s) => String(s).replace(/'/g, "''")
+  const ps = `# 조성현 플래너 — 자동 업데이트 적용 스크립트
+$ErrorActionPreference = 'Stop'
+$logPath = '${psEscape(logPath)}'
+$src = '${psEscape(extractedAppPath)}'
+$dst = '${psEscape(currentAppDir)}'
+$parentPid = ${parentPid}
+$exeName = '${psEscape(exeName)}'
+$newExe = Join-Path $dst $exeName
 
-set /a __TRIES=0
-:WAIT_EXIT
-tasklist /FI "IMAGENAME eq ${exeName}" 2>nul | find /I "${exeName}" >nul
-if errorlevel 1 goto DO_COPY
-set /a __TRIES+=1
-if %__TRIES% GEQ 30 goto DO_COPY
-ping -n 2 127.0.0.1 >nul
-goto WAIT_EXIT
+function Log([string]$msg) {
+  $line = "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] $msg"
+  Write-Host $line
+  try { Add-Content -LiteralPath $logPath -Value $line -Encoding utf8 } catch {}
+}
 
-:DO_COPY
-echo [%time%] 종료 대기 %__TRIES%초 후 robocopy 실행>> "%LOG%"
-robocopy "${extractedAppPath}" "${currentAppDir}" /MIR /R:5 /W:1 /NFL /NDL /NJH /NJS /NC /NS>> "%LOG%" 2>&1
-set RC=%ERRORLEVEL%
-echo [%time%] robocopy 종료 코드: %RC%>> "%LOG%"
-if %RC% GEQ 8 (
-  echo [%time%] 업데이트 실패. 폴더 권한 부족 또는 파일 잠김 가능. 관리자 권한으로 다시 시도하거나 해당 폴더가 OneDrive/Dropbox 같은 동기화 폴더가 아닌지 확인하세요.>> "%LOG%"
-  exit /b 1
-)
-echo [%time%] 새 버전 실행: ${newExePath}>> "%LOG%"
-start "" "${newExePath}"
-exit /b 0
+function Fail([string]$msg) {
+  Log "ERROR: $msg"
+  try {
+    Add-Type -AssemblyName System.Windows.Forms | Out-Null
+    [System.Windows.Forms.MessageBox]::Show(
+      "조성현 플래너 자동 업데이트가 실패했어요.\`n\`n원인: $msg\`n\`n로그 파일:\`n$logPath\`n\`nGitHub Releases에서 zip을 받아 수동으로 폴더를 교체해 주세요.",
+      '업데이트 실패',
+      'OK',
+      'Error'
+    ) | Out-Null
+  } catch {}
+  exit 1
+}
+
+try {
+  # 로그 초기화
+  '' | Set-Content -LiteralPath $logPath -Encoding utf8
+  Log '=== 업데이트 시작 ==='
+  Log "Source: $src"
+  Log "Target: $dst"
+  Log "Parent PID: $parentPid"
+  Log "PowerShell: $($PSVersionTable.PSVersion)"
+  Log "OS: $([System.Environment]::OSVersion.VersionString)"
+
+  # 1) 부모(현재 앱) 프로세스 종료 대기 (최대 30초)
+  $waited = 0
+  while ($waited -lt 30) {
+    $p = Get-Process -Id $parentPid -ErrorAction SilentlyContinue
+    if (-not $p) { break }
+    Start-Sleep -Seconds 1
+    $waited++
+  }
+  Log "부모 프로세스 종료 대기: ${'$'}waited 초"
+
+  # 2) 동일 이름의 다른 헬퍼/렌더러 프로세스도 잠시 대기 (최대 10초)
+  $exeBase = [System.IO.Path]::GetFileNameWithoutExtension($exeName)
+  $extra = 0
+  while ($extra -lt 10) {
+    $remain = Get-Process -Name $exeBase -ErrorAction SilentlyContinue
+    if (-not $remain) { break }
+    Start-Sleep -Seconds 1
+    $extra++
+  }
+  Log "기타 프로세스 정리 대기: ${'$'}extra 초"
+
+  # 3) 백업 → 새 폴더로 통째 교체
+  $stamp = Get-Date -Format 'yyyyMMddHHmmss'
+  $backup = "${'$'}dst.old.${'$'}stamp"
+  Log "백업: $dst -> $backup"
+  Move-Item -LiteralPath $dst -Destination $backup -Force
+
+  Log "교체: $src -> $dst"
+  Move-Item -LiteralPath $src -Destination $dst -Force
+
+  # 4) 새 실행 파일 실행
+  if (-not (Test-Path -LiteralPath $newExe)) {
+    Fail "새 버전의 실행 파일을 찾을 수 없어요: $newExe"
+  }
+  Log "실행: $newExe"
+  Start-Process -FilePath $newExe
+
+  Log '=== 업데이트 완료 ==='
+
+  # 5) 백업 폴더는 다음 부팅까지 보관 후 자동 삭제 (실패 시 무시)
+  try {
+    Start-Sleep -Seconds 3
+    Remove-Item -LiteralPath $backup -Recurse -Force -ErrorAction SilentlyContinue
+    Log "백업 정리 완료"
+  } catch {
+    Log "백업 정리 실패(무시 가능): $($_.Exception.Message)"
+  }
+
+  exit 0
+} catch {
+  Fail $_.Exception.Message
+}
 `
-  // UTF-8 BOM 추가 → 한글이 포함된 경로(예: 한글 username, '바탕 화면')도 cmd.exe 가 정상 파싱
-  fs.writeFileSync(batPath, '﻿' + bat, { encoding: 'utf-8' })
+  // BOM 추가 → 구형 PowerShell 에서도 한글 안전
+  fs.writeFileSync(psPath, '﻿' + ps, { encoding: 'utf-8' })
 
-  const child = spawn('cmd.exe', ['/c', batPath], {
-    detached: true, stdio: 'ignore', windowsHide: true,
+  // 일부러 보이게 띄움 (windowsHide 폐기). 사용자가 진행 상황을 볼 수 있고
+  // 멈춰도 직접 닫아서 빠져나올 수 있다.
+  const child = spawn('powershell.exe', [
+    '-NoProfile', '-ExecutionPolicy', 'Bypass',
+    '-File', psPath,
+  ], {
+    detached: true, stdio: 'ignore', windowsHide: false,
   })
   child.unref()
-  // app.quit() 은 종료 거부 핸들러/모달 등에 막힐 수 있어 강제 종료(app.exit) 사용
   setTimeout(() => app.exit(0), 600)
   return true
 })
