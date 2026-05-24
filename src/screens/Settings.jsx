@@ -163,7 +163,7 @@ export default function Settings() {
       </div>
 
       {/* 데이터 */}
-      <div className="card">
+      <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-title">💾 데이터</div>
         <div className="hint" style={{ marginBottom: 10 }}>
           모든 데이터는 아래 파일에 저장됩니다. 앱(.exe)을 새 버전으로 교체해도
@@ -184,7 +184,141 @@ export default function Settings() {
         </div>
       </div>
 
+      {isElectron && <UpdateCard showToast={show} />}
+
       <Toast />
+    </div>
+  )
+}
+
+// ── 업데이트 카드 ────────────────────────────────────────────
+function UpdateCard({ showToast }) {
+  const [version, setVersion] = useState('')
+  const [phase, setPhase] = useState('idle') // idle|checking|noupdate|found|downloading|ready|error
+  const [info, setInfo] = useState(null)
+  const [progress, setProgress] = useState({ phase: '', pct: 0 })
+  const [extractedPath, setExtractedPath] = useState(null)
+
+  useEffect(() => {
+    if (!window.plannerUpdater) return
+    window.plannerUpdater.currentVersion().then(setVersion).catch(() => {})
+    const off = window.plannerUpdater.onProgress(setProgress)
+    return () => { if (off) off() }
+  }, [])
+
+  const check = async () => {
+    setPhase('checking')
+    try {
+      const r = await window.plannerUpdater.check()
+      setInfo(r)
+      setPhase(r.hasUpdate ? 'found' : 'noupdate')
+    } catch (e) {
+      setPhase('error')
+      showToast('업데이트 확인 실패: ' + (e?.message || '네트워크 오류'))
+    }
+  }
+
+  const download = async () => {
+    if (!info?.downloadUrl) {
+      showToast('다운로드 가능한 파일이 없어요. GitHub 페이지에서 직접 받아주세요.')
+      return
+    }
+    setPhase('downloading')
+    setProgress({ phase: 'download', pct: 0 })
+    try {
+      const r = await window.plannerUpdater.download(info.downloadUrl)
+      setExtractedPath(r.extractedAppPath)
+      setPhase('ready')
+      showToast('다운로드 완료! 적용 버튼을 누르면 앱이 새 버전으로 교체돼요.')
+    } catch (e) {
+      setPhase('error')
+      showToast('다운로드 실패: ' + (e?.message || '네트워크 오류'))
+    }
+  }
+
+  const install = async () => {
+    if (!window.confirm('앱이 종료되고 새 버전으로 자동 교체됩니다.\n진행할까요?')) return
+    try {
+      await window.plannerUpdater.install(extractedPath)
+      // 성공 시 곧 앱 종료됨 — UI 반응 불필요
+    } catch (e) {
+      setPhase('error')
+      showToast('설치 실패: ' + (e?.message || '알 수 없는 오류'))
+    }
+  }
+
+  const openReleases = () => window.plannerUpdater.openReleases()
+  const sizeMB = info?.downloadSize ? (info.downloadSize / 1024 / 1024).toFixed(1) + ' MB' : ''
+
+  return (
+    <div className="card">
+      <div className="card-title">🔄 앱 업데이트</div>
+      <div className="hint" style={{ marginBottom: 10 }}>
+        현재 버전: <b style={{ color: '#2e7d32' }}>v{version || '?'}</b>
+        {' · '}
+        <a href="#" onClick={(e) => { e.preventDefault(); openReleases() }} style={{ color: '#2e7d32' }}>
+          GitHub Releases 보기
+        </a>
+      </div>
+
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+        <button className="btn" onClick={check} disabled={phase === 'checking' || phase === 'downloading'}>
+          {phase === 'checking' ? '확인 중…' : '🔍 업데이트 확인'}
+        </button>
+        {phase === 'noupdate' && (
+          <span className="chip" style={{ background: '#e8f5e9', color: '#1b5e20', padding: '8px 14px', borderRadius: 10, fontSize: 13, fontWeight: 600 }}>
+            🌿 최신 버전입니다
+          </span>
+        )}
+      </div>
+
+      {phase === 'found' && info && (
+        <div style={{ marginTop: 14, padding: 14, background: '#fff8e1', borderRadius: 10, borderLeft: '3px solid #fbc02d' }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#7a5a00', marginBottom: 6 }}>
+            🎉 새 버전 발견 — v{info.latest} {sizeMB && <span style={{ fontSize: 12, color: '#8a7a3a', fontWeight: 500 }}>({sizeMB})</span>}
+          </div>
+          {info.notes && (
+            <div style={{ fontSize: 12, color: '#34433a', whiteSpace: 'pre-wrap', maxHeight: 140, overflowY: 'auto', marginBottom: 10, lineHeight: 1.6 }}>
+              {info.notes}
+            </div>
+          )}
+          <div className="row">
+            <button className="btn" onClick={download}>📥 다운로드 후 자동 설치</button>
+            <button className="btn ghost" onClick={openReleases}>GitHub에서 직접 받기</button>
+          </div>
+        </div>
+      )}
+
+      {phase === 'downloading' && (
+        <div style={{ marginTop: 14 }}>
+          <div className="hint" style={{ marginBottom: 6 }}>
+            {progress.phase === 'extract' ? '📦 압축 해제 중…' : `⬇ 다운로드 중 ${progress.pct || 0}%`}
+          </div>
+          <div className="bar">
+            <span style={{ width: (progress.phase === 'extract' ? 100 : progress.pct || 0) + '%' }} />
+          </div>
+          <div className="hint" style={{ marginTop: 8 }}>완료까지 잠시만 기다려 주세요. 이 창을 닫지 마세요.</div>
+        </div>
+      )}
+
+      {phase === 'ready' && (
+        <div style={{ marginTop: 14, padding: 14, background: '#e8f5e9', borderRadius: 10, borderLeft: '3px solid #2e7d32' }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#1b5e20', marginBottom: 8 }}>
+            ✅ 다운로드 완료 — 적용할 준비가 됐어요
+          </div>
+          <div className="hint" style={{ marginBottom: 10 }}>
+            [지금 적용]을 누르면 앱이 약 3초 후 종료되고 새 버전이 자동으로 실행됩니다.
+            데이터는 그대로 유지됩니다.
+          </div>
+          <button className="btn" onClick={install}>⚡ 지금 적용 (앱 재시작)</button>
+        </div>
+      )}
+
+      {phase === 'error' && (
+        <div className="row" style={{ marginTop: 10 }}>
+          <button className="btn ghost" onClick={openReleases}>🌐 GitHub Releases 페이지 열기</button>
+        </div>
+      )}
     </div>
   )
 }

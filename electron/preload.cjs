@@ -11,3 +11,17 @@ contextBridge.exposeInMainWorld('plannerStore', {
   openFolder: () => ipcRenderer.invoke('store:openFolder'),
   filePath: () => ipcRenderer.invoke('store:path'),
 })
+
+// 앱 내 업데이트 — GitHub Releases 기반
+contextBridge.exposeInMainWorld('plannerUpdater', {
+  currentVersion: () => ipcRenderer.invoke('update:currentVersion'),
+  check: () => ipcRenderer.invoke('update:check'),
+  download: (url) => ipcRenderer.invoke('update:download', url),
+  install: (extractedAppPath) => ipcRenderer.invoke('update:install', extractedAppPath),
+  openReleases: () => ipcRenderer.invoke('update:openReleases'),
+  onProgress: (cb) => {
+    const handler = (_e, payload) => cb(payload)
+    ipcRenderer.on('update:progress', handler)
+    return () => ipcRenderer.removeListener('update:progress', handler)
+  },
+})
