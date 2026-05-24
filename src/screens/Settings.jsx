@@ -37,6 +37,16 @@ export default function Settings() {
     if (!window.confirm(`'${s?.name}' 과목을 삭제할까요?\n(연결된 메모·기록은 '미지정'으로 남습니다)`)) return
     update((d) => ({ ...d, subjects: d.subjects.filter((x) => x.id !== id) }))
   }
+  const moveSubject = (id, dir) => {
+    update((d) => {
+      const list = [...d.subjects]
+      const idx = list.findIndex((x) => x.id === id)
+      const next = idx + dir
+      if (idx < 0 || next < 0 || next >= list.length) return d
+      ;[list[idx], list[next]] = [list[next], list[idx]]
+      return { ...d, subjects: list }
+    })
+  }
 
   const addExam = () => {
     if (!eName.trim() || !eDate) return
@@ -72,12 +82,27 @@ export default function Settings() {
 
       {/* 과목 */}
       <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-title">📚 과목 추가/삭제</div>
-        {data.subjects.map((s) => (
+        <div className="card-title">📚 과목 추가/삭제 · 순서 변경</div>
+        <div className="hint" style={{ marginBottom: 6 }}>↑ ↓ 버튼으로 순서를 바꾸면 대시보드·타이머·메모 등 모든 화면의 정렬에 반영됩니다.</div>
+        {data.subjects.map((s, i) => (
           <div className="item" key={s.id}>
             <span className="dot" style={{ background: s.color }} />
             <span className="grow">{s.name}</span>
             <span className="tag" style={{ background: '#8aa', fontWeight: 500 }}>{s.category}</span>
+            <button
+              className="btn ghost sm"
+              onClick={() => moveSubject(s.id, -1)}
+              disabled={i === 0}
+              title="위로"
+              style={{ padding: '4px 8px' }}
+            >↑</button>
+            <button
+              className="btn ghost sm"
+              onClick={() => moveSubject(s.id, +1)}
+              disabled={i === data.subjects.length - 1}
+              title="아래로"
+              style={{ padding: '4px 8px' }}
+            >↓</button>
             <button className="btn danger sm" onClick={() => delSubject(s.id)}>삭제</button>
           </div>
         ))}
@@ -198,10 +223,14 @@ function UpdateCard({ showToast }) {
   const [info, setInfo] = useState(null)
   const [progress, setProgress] = useState({ phase: '', pct: 0 })
   const [extractedPath, setExtractedPath] = useState(null)
+  const [hasLog, setHasLog] = useState(false)
 
   useEffect(() => {
     if (!window.plannerUpdater) return
     window.plannerUpdater.currentVersion().then(setVersion).catch(() => {})
+    if (window.plannerUpdater.hasLog) {
+      window.plannerUpdater.hasLog().then(setHasLog).catch(() => {})
+    }
     const off = window.plannerUpdater.onProgress(setProgress)
     return () => { if (off) off() }
   }, [])
@@ -265,6 +294,11 @@ function UpdateCard({ showToast }) {
         <button className="btn" onClick={check} disabled={phase === 'checking' || phase === 'downloading'}>
           {phase === 'checking' ? '확인 중…' : '🔍 업데이트 확인'}
         </button>
+        {hasLog && (
+          <button className="btn ghost" onClick={() => window.plannerUpdater.openLog()}>
+            📄 지난 업데이트 로그 보기
+          </button>
+        )}
         {phase === 'noupdate' && (
           <span className="chip" style={{ background: '#e8f5e9', color: '#1b5e20', padding: '8px 14px', borderRadius: 10, fontSize: 13, fontWeight: 600 }}>
             🌿 최신 버전입니다

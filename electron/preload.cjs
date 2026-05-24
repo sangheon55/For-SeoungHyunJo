@@ -24,6 +24,8 @@ contextBridge.exposeInMainWorld('plannerUpdater', {
   download: (url) => ipcRenderer.invoke('update:download', url),
   install: (extractedAppPath) => ipcRenderer.invoke('update:install', extractedAppPath),
   openReleases: () => ipcRenderer.invoke('update:openReleases'),
+  hasLog: () => ipcRenderer.invoke('update:hasLog'),
+  openLog: () => ipcRenderer.invoke('update:openLog'),
   onProgress: (cb) => {
     const handler = (_e, payload) => cb(payload)
     ipcRenderer.on('update:progress', handler)

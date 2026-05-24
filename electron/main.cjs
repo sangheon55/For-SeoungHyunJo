@@ -170,34 +170,67 @@ ipcMain.handle('update:install', async (_e, extractedAppPath) => {
 
   const currentAppDir = path.dirname(process.execPath)
   const exeName = path.basename(process.execPath)
-  const batPath = path.join(app.getPath('userData'), 'updates', 'apply.bat')
+  const updatesDir = path.join(app.getPath('userData'), 'updates')
+  const batPath = path.join(updatesDir, 'apply.bat')
+  const logPath = path.join(updatesDir, 'update.log')
   const newExePath = path.join(currentAppDir, exeName)
-  const cleanupDir = path.dirname(batPath)
 
   // robocopy /MIR : 거울 복사. exit code 0~7은 성공, 8 이상이 실패.
+  // 안전성 강화:
+  //  • tasklist 폴링으로 .exe 가 실제 종료될 때까지 최대 30초 대기
+  //  • /R:5 /W:1 로 robocopy 재시도 제한 (기본은 100만회 × 30초로 사실상 무한 대기)
+  //  • pause 제거 → 결과는 update.log 에 기록 (cmd 창이 숨겨져 있어 pause 가 영구 정지의 원인)
   const bat = `@echo off
 chcp 65001 >nul
-timeout /t 3 /nobreak >nul
-robocopy "${extractedAppPath}" "${currentAppDir}" /MIR /NFL /NDL /NJH /NJS /NC /NS
+set "LOG=${logPath}"
+echo === %date% %time% 업데이트 시작 ===> "%LOG%"
+echo SRC=${extractedAppPath}>> "%LOG%"
+echo DST=${currentAppDir}>> "%LOG%"
+
+set /a __TRIES=0
+:WAIT_EXIT
+tasklist /FI "IMAGENAME eq ${exeName}" 2>nul | find /I "${exeName}" >nul
+if errorlevel 1 goto DO_COPY
+set /a __TRIES+=1
+if %__TRIES% GEQ 30 goto DO_COPY
+ping -n 2 127.0.0.1 >nul
+goto WAIT_EXIT
+
+:DO_COPY
+echo [%time%] 종료 대기 %__TRIES%초 후 robocopy 실행>> "%LOG%"
+robocopy "${extractedAppPath}" "${currentAppDir}" /MIR /R:5 /W:1 /NFL /NDL /NJH /NJS /NC /NS>> "%LOG%" 2>&1
 set RC=%ERRORLEVEL%
+echo [%time%] robocopy 종료 코드: %RC%>> "%LOG%"
 if %RC% GEQ 8 (
-  echo.
-  echo 업데이트 실패: robocopy 오류 코드 %RC%
-  echo 폴더 권한이 부족하거나 파일이 잠겨 있을 수 있습니다.
-  pause
+  echo [%time%] 업데이트 실패. 폴더 권한 부족 또는 파일 잠김 가능. 관리자 권한으로 다시 시도하거나 해당 폴더가 OneDrive/Dropbox 같은 동기화 폴더가 아닌지 확인하세요.>> "%LOG%"
   exit /b 1
 )
+echo [%time%] 새 버전 실행: ${newExePath}>> "%LOG%"
 start "" "${newExePath}"
-rmdir /s /q "${cleanupDir}"
+exit /b 0
 `
-  fs.writeFileSync(batPath, bat, { encoding: 'utf-8' })
+  // UTF-8 BOM 추가 → 한글이 포함된 경로(예: 한글 username, '바탕 화면')도 cmd.exe 가 정상 파싱
+  fs.writeFileSync(batPath, '﻿' + bat, { encoding: 'utf-8' })
 
   const child = spawn('cmd.exe', ['/c', batPath], {
     detached: true, stdio: 'ignore', windowsHide: true,
   })
   child.unref()
-  setTimeout(() => app.quit(), 600)
+  // app.quit() 은 종료 거부 핸들러/모달 등에 막힐 수 있어 강제 종료(app.exit) 사용
+  setTimeout(() => app.exit(0), 600)
   return true
+})
+
+ipcMain.handle('update:openLog', () => {
+  const logPath = path.join(app.getPath('userData'), 'updates', 'update.log')
+  if (!fs.existsSync(logPath)) return false
+  shell.openPath(logPath)
+  return true
+})
+
+ipcMain.handle('update:hasLog', () => {
+  const logPath = path.join(app.getPath('userData'), 'updates', 'update.log')
+  return fs.existsSync(logPath)
 })
 
 ipcMain.handle('update:openReleases', () => shell.openExternal(GH_RELEASES_PAGE))

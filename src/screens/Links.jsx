@@ -125,6 +125,25 @@ export default function Links() {
     show('삭제했어요')
   }
 
+  // 현재 화면에 보이는 카드 기준으로 인접한 카드와 위치를 바꿈.
+  // 카테고리 필터가 걸려 있어도 사용자에게 보이는 순서대로 자연스럽게 이동된다.
+  const move = (id, dir) => {
+    update((d) => {
+      const list = [...(d.links || [])]
+      const visible = selectedCat === 'all'
+        ? list
+        : list.filter((l) => (l.category || '기타') === selectedCat)
+      const vIdx = visible.findIndex((l) => l.id === id)
+      const target = visible[vIdx + dir]
+      if (!target) return d
+      const aIdx = list.findIndex((l) => l.id === id)
+      const bIdx = list.findIndex((l) => l.id === target.id)
+      if (aIdx < 0 || bIdx < 0) return d
+      ;[list[aIdx], list[bIdx]] = [list[bIdx], list[aIdx]]
+      return { ...d, links: list }
+    })
+  }
+
   const openLink = async (url) => {
     const safe = normalizeUrl(url)
     if (!safe) { show('URL이 비어있어요'); return }
@@ -238,13 +257,17 @@ export default function Links() {
                 : '이 카테고리에 등록된 사이트가 없어요.'}
             </div>
           )}
-          {cards.map((l) => <LinkCard
+          {cards.map((l, i) => <LinkCard
             key={l.id}
             link={l}
             color={categoryColor(l.category || '기타')}
+            canUp={i > 0}
+            canDown={i < cards.length - 1}
             onOpen={() => openLink(l.url)}
             onEdit={() => openEdit(l)}
             onDelete={() => del(l)}
+            onUp={() => move(l.id, -1)}
+            onDown={() => move(l.id, +1)}
           />)}
         </div>
       </div>
@@ -254,7 +277,7 @@ export default function Links() {
   )
 }
 
-function LinkCard({ link, color, onOpen, onEdit, onDelete }) {
+function LinkCard({ link, color, canUp, canDown, onOpen, onEdit, onDelete, onUp, onDown }) {
   const title = link.alias?.trim() || link.name
   const showName = link.alias?.trim() && link.alias.trim() !== link.name
   return (
@@ -270,6 +293,8 @@ function LinkCard({ link, color, onOpen, onEdit, onDelete }) {
           </div>
         </div>
         <div className="row" style={{ gap: 6, alignItems: 'flex-start' }}>
+          <button className="btn ghost sm" onClick={onUp} disabled={!canUp} title="위로" style={{ padding: '4px 8px' }}>↑</button>
+          <button className="btn ghost sm" onClick={onDown} disabled={!canDown} title="아래로" style={{ padding: '4px 8px' }}>↓</button>
           <button className="btn sm" onClick={onOpen}>열기 ↗</button>
           <button className="btn ghost sm" onClick={onEdit}>수정</button>
           <button className="btn danger sm" onClick={onDelete}>삭제</button>
