@@ -12,6 +12,11 @@ contextBridge.exposeInMainWorld('plannerStore', {
   filePath: () => ipcRenderer.invoke('store:path'),
 })
 
+// 외부 링크 열기 (자주 가는 곳 등에서 사용)
+contextBridge.exposeInMainWorld('plannerShell', {
+  openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
+})
+
 // 앱 내 업데이트 — GitHub Releases 기반
 contextBridge.exposeInMainWorld('plannerUpdater', {
   currentVersion: () => ipcRenderer.invoke('update:currentVersion'),

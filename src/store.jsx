@@ -19,6 +19,13 @@ const defaultData = {
   memos: [],        // { id, subjectId, title, body, updatedAt }
   reviews: [],      // { id, name, subjectId, totalChapters, doneChapters, targetRounds, round }
   wrongAnswers: [], // 오답노트 — 자세한 스키마는 lib/ebbinghaus.js 참고
+  links: [          // 자주 가는 사이트 모음 — { id, name, alias, url, category, description, createdAt }
+    { id: 'lk1', name: '사이버국가고시센터', alias: '', url: 'https://gosi.kr',                 category: '시험 정보',  description: '시험 일정·공고·합격자 발표가 여기에서 나와요',                     createdAt: '2026-05-24' },
+    { id: 'lk2', name: '인사혁신처',         alias: '', url: 'https://www.mpm.go.kr',          category: '시험 정보',  description: '5급 공무원 시험 주관 부처',                                       createdAt: '2026-05-24' },
+    { id: 'lk3', name: '국립산림과학원',     alias: '', url: 'https://nifos.forest.go.kr',     category: '산림자원직', description: '산림자원직 전공 자료·연구 보고서',                                createdAt: '2026-05-24' },
+    { id: 'lk4', name: '산림청',             alias: '', url: 'https://www.forest.go.kr',      category: '산림자원직', description: '산림청 정책·통계',                                                 createdAt: '2026-05-24' },
+    { id: 'lk5', name: '나무위키',           alias: '', url: 'https://namu.wiki',              category: '학습 자료',  description: '개념 빠르게 훑을 때',                                              createdAt: '2026-05-24' },
+  ],
   examDates: [
     { id: 'e1', name: '1차 시험(PSAT)', date: '2027-03-06' },
     { id: 'e2', name: '원서 접수 마감', date: '2027-01-20' },
@@ -40,6 +47,7 @@ function mergeDefaults(loaded) {
     settings: { ...defaultData.settings, ...(loaded.settings || {}) },
     wrongSettings: { ...defaultData.wrongSettings, ...(loaded.wrongSettings || {}) },
     wrongAnswers: Array.isArray(loaded?.wrongAnswers) ? loaded.wrongAnswers : [],
+    links: Array.isArray(loaded?.links) ? loaded.links : defaultData.links,
   }
 }
 const clone = (o) => JSON.parse(JSON.stringify(o))

@@ -202,6 +202,13 @@ rmdir /s /q "${cleanupDir}"
 
 ipcMain.handle('update:openReleases', () => shell.openExternal(GH_RELEASES_PAGE))
 
+// 임의 외부 URL 열기 — http/https만 허용
+ipcMain.handle('shell:openExternal', async (_e, url) => {
+  if (typeof url !== 'string') return false
+  if (!/^https?:\/\//i.test(url)) return false
+  try { await shell.openExternal(url); return true } catch { return false }
+})
+
 ipcMain.handle('store:import', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog({
     title: '데이터 가져오기',
