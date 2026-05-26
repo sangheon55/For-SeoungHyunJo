@@ -8,6 +8,7 @@ import WrongNotes from './screens/WrongNotes.jsx'
 import Links from './screens/Links.jsx'
 import Stats from './screens/Stats.jsx'
 import Forest from './screens/Forest.jsx'
+import Rest from './screens/Rest.jsx'
 import Settings from './screens/Settings.jsx'
 
 const NAV = [
@@ -18,6 +19,7 @@ const NAV = [
   { id: 'reviews', label: '회독 관리', ico: '📚', C: Reviews },
   { id: 'wrong', label: '오답노트', ico: '❌', C: WrongNotes },
   { id: 'links', label: '자주 가는 곳', ico: '🔗', C: Links },
+  { id: 'rest', label: '쉼', ico: '☕', C: Rest },
   { id: 'stats', label: '통계', ico: '📊', C: Stats },
   { id: 'forest', label: '나의 숲', ico: '🌲', C: Forest },
   { id: 'settings', label: '설정', ico: '⚙️', C: Settings },

@@ -175,157 +175,145 @@ ipcMain.handle('update:install', async (_e, extractedAppPath) => {
   const logPath = path.join(app.getPath('userData'), 'update.log')
   const hostLogPath = path.join(app.getPath('userData'), 'host-update.log')
   const tempLogPath = path.join(require('os').tmpdir(), 'seonghyeon-update.log')
-  const newExePath = path.join(currentAppDir, exeName)
+  const cmdBeaconPath = path.join(app.getPath('userData'), 'cmd-beacon.log')
+  const cmdOutputPath = path.join(app.getPath('userData'), 'cmd-output.log')
+  const applyCmdPath = path.join(updatesDir, 'apply.cmd')
   const parentPid = process.pid
 
-  // v1.4.4: 보안(Windows Defender ASR/AMSI/3rd-party AV) 차단 대응.
-  //  • .ps1 파일을 디스크에 안 씀 → -EncodedCommand (Base64 UTF-16LE) 직접 전달
-  //  • Node.js 단계에서 host-update.log 에 시도 기록 → PS 가 통째로 차단돼도 흔적 남음
-  //  • PS 내부에서 update.log + %TEMP%/seonghyeon-update.log 이중 로깅 → 하나가 막혀도 다른 쪽 확인 가능
-  //  • 실패 시 MessageBox 로 사용자에게 즉시 한국어 안내
+  // v1.4.7: PowerShell 완전 폐기 → cmd.exe + apply.cmd 로 전환.
+  //  • v1.4.4 (EncodedCommand) 와 v1.4.6 (진단강화) 모두 AMSI 가 디코드 후
+  //    soft-block (exit 0, stderr 없음) 으로 PS 를 죽이는 게 확인됨.
+  //  • cmd.exe 의 내장 명령(move/start/timeout)은 AMSI 스캔 대상이 아님.
+  //  • apply.cmd 는 ASCII 본문 + 경로만 치환 → 인코딩 이슈 회피.
+  //  • update.log 는 cmd 가 직접 write, cmd-beacon.log 는 첫 줄 echo 로 기록.
+  //  • cmd-output.log 는 cmd 의 stdout/stderr 를 stdio 상속으로 캡쳐.
 
   // ── Host(Electron Main) 측 사전 로깅 ─────────────────────────
-  // PS 가 한 줄도 못 돌더라도 "main process 가 spawn 시도는 했다" 는 흔적이 남음.
-  // 사용자가 update.log 가 없다 = 보안이 PS 를 차단했다 라고 진단 가능.
+  // cmd 가 한 줄도 못 돌더라도 "main process 가 spawn 시도는 했다" 는 흔적이 남음.
   const hostLog = (msg) => {
     try {
       fs.appendFileSync(hostLogPath, `[${new Date().toISOString()}] ${msg}\r\n`, { encoding: 'utf-8' })
     } catch {}
   }
-  hostLog('=== update:install host-side start ===')
+  hostLog('=== update:install host-side start (v1.4.7 cmd) ===')
   hostLog(`exe=${process.execPath}`)
   hostLog(`pid=${parentPid}`)
   hostLog(`src=${extractedAppPath}`)
   hostLog(`dst=${currentAppDir}`)
 
-  const psEscape = (s) => String(s).replace(/'/g, "''")
-  const ps = `# 조성현 플래너 — 자동 업데이트 적용 스크립트 (v1.4.4)
-$ErrorActionPreference = 'Stop'
-$logPath = '${psEscape(logPath)}'
-$tempLog = '${psEscape(tempLogPath)}'
-$src = '${psEscape(extractedAppPath)}'
-$dst = '${psEscape(currentAppDir)}'
-$parentPid = ${parentPid}
-$exeName = '${psEscape(exeName)}'
-$newExe = Join-Path $dst $exeName
+  // cmd 에서 ^ & < > | % 같은 메타문자는 일반적인 PATH 에선 안 나오므로
+  // 큰따옴표로 감싸는 것만으로 충분. 만일을 위해 ^ 만 이스케이프.
+  const cmdQuote = (s) => `"${String(s).replace(/\^/g, '^^').replace(/"/g, '""')}"`
+  const stamp = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)
+  const backupDir = `${currentAppDir}.old.${stamp}`
+  const newExePath = path.join(currentAppDir, exeName)
+  const releasesPage = GH_RELEASES_PAGE
 
-function Log([string]$msg) {
-  $line = "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] $msg"
-  Write-Host $line
-  # 이중 로깅 — 한쪽이 막혀도 다른 쪽 확인 가능
-  try { Add-Content -LiteralPath $logPath -Value $line -Encoding utf8 } catch {}
-  try { Add-Content -LiteralPath $tempLog -Value $line -Encoding utf8 } catch {}
-}
-
-function Fail([string]$msg) {
-  Log "ERROR: $msg"
-  try {
-    Add-Type -AssemblyName System.Windows.Forms | Out-Null
-    [System.Windows.Forms.MessageBox]::Show(
-      "조성현 플래너 자동 업데이트가 실패했어요.\`n\`n원인: $msg\`n\`n로그 파일:\`n$logPath\`n$tempLog\`n\`nGitHub Releases에서 zip을 받아 수동으로 폴더를 교체해 주세요.",
-      '업데이트 실패',
-      'OK',
-      'Error'
-    ) | Out-Null
-  } catch {}
-  exit 1
-}
-
-try {
-  # 로그 초기화 (둘 다)
-  '' | Set-Content -LiteralPath $logPath -Encoding utf8
-  '' | Set-Content -LiteralPath $tempLog -Encoding utf8
-  Log '=== 업데이트 시작 (v1.4.4 EncodedCommand) ==='
-  Log "Source: $src"
-  Log "Target: $dst"
-  Log "Parent PID: $parentPid"
-  Log "PowerShell: $($PSVersionTable.PSVersion)"
-  Log "OS: $([System.Environment]::OSVersion.VersionString)"
-
-  $waited = 0
-  while ($waited -lt 30) {
-    $p = Get-Process -Id $parentPid -ErrorAction SilentlyContinue
-    if (-not $p) { break }
-    Start-Sleep -Seconds 1
-    $waited++
-  }
-  Log "부모 프로세스 종료 대기: ${'$'}waited 초"
-
-  $exeBase = [System.IO.Path]::GetFileNameWithoutExtension($exeName)
-  $extra = 0
-  while ($extra -lt 10) {
-    $remain = Get-Process -Name $exeBase -ErrorAction SilentlyContinue
-    if (-not $remain) { break }
-    Start-Sleep -Seconds 1
-    $extra++
-  }
-  Log "기타 프로세스 정리 대기: ${'$'}extra 초"
-
-  $stamp = Get-Date -Format 'yyyyMMddHHmmss'
-  $backup = "${'$'}dst.old.${'$'}stamp"
-  Log "백업: $dst -> $backup"
-  Move-Item -LiteralPath $dst -Destination $backup -Force
-
-  Log "교체: $src -> $dst"
-  Move-Item -LiteralPath $src -Destination $dst -Force
-
-  if (-not (Test-Path -LiteralPath $newExe)) {
-    Fail "새 버전의 실행 파일을 찾을 수 없어요: $newExe"
-  }
-  Log "실행: $newExe"
-  Start-Process -FilePath $newExe
-
-  Log '=== 업데이트 완료 ==='
+  // ── apply.cmd 생성 ──────────────────────────────────────────
+  // ASCII 본문만 사용 (Korean text 는 echo 시 깨질 수 있어 회피).
+  // 줄 끝은 CRLF — cmd.exe 가 LF-only 를 다룰 때 가끔 첫 줄을 못 읽음.
+  const applyCmd = [
+    `@echo off`,
+    `setlocal EnableExtensions`,
+    `>>${cmdQuote(cmdBeaconPath)} echo [%date% %time%] cmd beacon reached pid=%~1`,
+    `>>${cmdQuote(logPath)} echo [%date% %time%] === update apply start v1.5.0 ===`,
+    `>>${cmdQuote(logPath)} echo src=${cmdQuote(extractedAppPath)}`,
+    `>>${cmdQuote(logPath)} echo dst=${cmdQuote(currentAppDir)}`,
+    `>>${cmdQuote(logPath)} echo backup=${cmdQuote(backupDir)}`,
+    // 부모 Electron 이 파일 핸들을 풀 시간 확보 (host 는 spawn 후 1.5s 에 exit).
+    `timeout /T 4 /NOBREAK >nul 2>&1`,
+    `>>${cmdQuote(logPath)} echo [%date% %time%] move dst to backup`,
+    `move /Y ${cmdQuote(currentAppDir)} ${cmdQuote(backupDir)} >>${cmdQuote(logPath)} 2>&1`,
+    // dst 이동이 실패하면 잠금이 남아있는 것 — 한 번 더 기다린 뒤 재시도.
+    `if errorlevel 1 (`,
+    `  >>${cmdQuote(logPath)} echo [%date% %time%] retry move dst after 4s`,
+    `  timeout /T 4 /NOBREAK >nul 2>&1`,
+    `  move /Y ${cmdQuote(currentAppDir)} ${cmdQuote(backupDir)} >>${cmdQuote(logPath)} 2>&1`,
+    `)`,
+    `if errorlevel 1 goto :fail_no_backup`,
+    `>>${cmdQuote(logPath)} echo [%date% %time%] move src to dst`,
+    `move /Y ${cmdQuote(extractedAppPath)} ${cmdQuote(currentAppDir)} >>${cmdQuote(logPath)} 2>&1`,
+    `if errorlevel 1 goto :restore`,
+    `if not exist ${cmdQuote(newExePath)} (`,
+    `  >>${cmdQuote(logPath)} echo [%date% %time%] new exe missing: ${cmdQuote(newExePath)}`,
+    `  goto :restore`,
+    `)`,
+    `>>${cmdQuote(logPath)} echo [%date% %time%] launching new exe`,
+    `start "" ${cmdQuote(newExePath)}`,
+    `timeout /T 3 /NOBREAK >nul 2>&1`,
+    `rmdir /S /Q ${cmdQuote(backupDir)} >nul 2>&1`,
+    `>>${cmdQuote(logPath)} echo [%date% %time%] === update complete ===`,
+    `exit /b 0`,
+    ``,
+    `:restore`,
+    `>>${cmdQuote(logPath)} echo [%date% %time%] FAILED at src->dst move, restoring backup`,
+    `rmdir /S /Q ${cmdQuote(currentAppDir)} >nul 2>&1`,
+    `move /Y ${cmdQuote(backupDir)} ${cmdQuote(currentAppDir)} >>${cmdQuote(logPath)} 2>&1`,
+    `start "" ${cmdQuote(releasesPage)}`,
+    `exit /b 1`,
+    ``,
+    `:fail_no_backup`,
+    `>>${cmdQuote(logPath)} echo [%date% %time%] FAILED at dst->backup move (file still locked?)`,
+    `start "" ${cmdQuote(releasesPage)}`,
+    `exit /b 1`,
+    ``,
+  ].join('\r\n')
 
   try {
-    Start-Sleep -Seconds 3
-    Remove-Item -LiteralPath $backup -Recurse -Force -ErrorAction SilentlyContinue
-    Log "백업 정리 완료"
-  } catch {
-    Log "백업 정리 실패(무시 가능): $($_.Exception.Message)"
+    fs.mkdirSync(updatesDir, { recursive: true })
+    fs.writeFileSync(applyCmdPath, applyCmd, { encoding: 'utf-8' })
+    hostLog(`wrote apply.cmd length=${applyCmd.length} chars path=${applyCmdPath}`)
+  } catch (e) {
+    hostLog(`write apply.cmd FAILED: ${e.message}`)
+    throw new Error(`업데이트 스크립트를 디스크에 쓰지 못했어요: ${e.message}`)
   }
 
-  exit 0
-} catch {
-  Fail $_.Exception.Message
-}
-`
-
-  // PowerShell -EncodedCommand 는 UTF-16LE Base64 를 받는다.
-  // 디스크에 .ps1 파일을 안 쓰므로 AV/ASR 의 스크립트 스캐닝에 노출되지 않는다.
-  const encoded = Buffer.from(ps, 'utf16le').toString('base64')
-  hostLog(`encoded ps script length=${ps.length} chars, base64=${encoded.length} chars`)
+  // cmd 의 stdout/stderr 를 파일에 직접 캡쳐 (stdio 상속).
+  let outFd = null
+  try {
+    fs.appendFileSync(cmdOutputPath, `\r\n=== ${new Date().toISOString()} cmd spawn ===\r\n`, 'utf-8')
+    outFd = fs.openSync(cmdOutputPath, 'a')
+  } catch (e) {
+    hostLog(`failed to open cmd-output.log: ${e.message}`)
+  }
 
   try {
-    const child = spawn('powershell.exe', [
-      '-NoProfile', '-ExecutionPolicy', 'Bypass',
-      '-EncodedCommand', encoded,
-    ], {
-      detached: true, stdio: 'ignore', windowsHide: false,
+    const child = spawn('cmd.exe', ['/c', applyCmdPath, String(parentPid)], {
+      detached: true,
+      stdio: outFd != null ? ['ignore', outFd, outFd] : 'ignore',
+      windowsHide: false,
     })
     child.unref()
-    hostLog(`spawned powershell.exe pid=${child.pid || 'unknown'}`)
+    hostLog(`spawned cmd.exe pid=${child.pid || 'unknown'}`)
+
+    child.on('exit', (code, signal) => {
+      hostLog(`cmd exit early code=${code} signal=${signal}`)
+    })
+    child.on('error', (err) => {
+      hostLog(`cmd child error: ${err.message}`)
+    })
   } catch (e) {
     hostLog(`spawn FAILED: ${e.message}`)
-    throw new Error(`PowerShell 실행이 보안 정책에 막혔을 수 있어요. host-update.log 를 확인해 주세요. (${e.message})`)
+    if (outFd != null) try { fs.closeSync(outFd) } catch {}
+    throw new Error(`cmd.exe 실행이 보안 정책에 막혔을 수 있어요. host-update.log 를 확인해 주세요. (${e.message})`)
   }
 
-  setTimeout(() => app.exit(0), 600)
+  if (outFd != null) try { fs.closeSync(outFd) } catch {}
+
+  // 1.5초 대기 — cmd 가 timeout 으로 4초 대기하기 전에 Electron 이 먼저 종료되도록.
+  setTimeout(() => app.exit(0), 1500)
   return true
 })
 
 ipcMain.handle('update:openLog', () => {
   const userData = app.getPath('userData')
-  const logPath = path.join(userData, 'update.log')
-  const hostLogPath = path.join(userData, 'host-update.log')
+  const candidates = [
+    'update.log', 'host-update.log',
+    'cmd-beacon.log', 'cmd-output.log',
+    'ps-beacon.log', 'ps-output.log', 'ps-transcript.log',
+  ].map((n) => path.join(userData, n))
   const tempLogPath = path.join(require('os').tmpdir(), 'seonghyeon-update.log')
-  // 둘 다 있으면 폴더를 열어 사용자가 골라보게 함. 하나만 있으면 그 파일을 직접 연다.
-  if (fs.existsSync(logPath) && fs.existsSync(hostLogPath)) {
-    shell.openPath(userData)
-    return true
-  }
-  if (fs.existsSync(logPath)) { shell.openPath(logPath); return true }
-  if (fs.existsSync(hostLogPath)) { shell.openPath(hostLogPath); return true }
+  if (candidates.some((p) => fs.existsSync(p))) { shell.openPath(userData); return true }
   if (fs.existsSync(tempLogPath)) { shell.openPath(tempLogPath); return true }
   return false
 })
@@ -333,9 +321,12 @@ ipcMain.handle('update:openLog', () => {
 ipcMain.handle('update:hasLog', () => {
   const userData = app.getPath('userData')
   const tempLogPath = path.join(require('os').tmpdir(), 'seonghyeon-update.log')
-  return fs.existsSync(path.join(userData, 'update.log'))
-      || fs.existsSync(path.join(userData, 'host-update.log'))
-      || fs.existsSync(tempLogPath)
+  const names = [
+    'update.log', 'host-update.log',
+    'cmd-beacon.log', 'cmd-output.log',
+    'ps-beacon.log', 'ps-output.log', 'ps-transcript.log',
+  ]
+  return names.some((n) => fs.existsSync(path.join(userData, n))) || fs.existsSync(tempLogPath)
 })
 
 ipcMain.handle('update:openReleases', () => shell.openExternal(GH_RELEASES_PAGE))

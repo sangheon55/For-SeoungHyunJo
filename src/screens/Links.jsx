@@ -2,21 +2,9 @@ import React, { useMemo, useState } from 'react'
 import { useStore, uid } from '../store.jsx'
 import { dateStr } from '../lib/util.js'
 import { useToast } from '../components/ui.jsx'
+import CategoryEditor from '../components/CategoryEditor.jsx'
 
-const DEFAULT_CATEGORIES = [
-  { name: '시험 정보',  color: '#1976D2' },
-  { name: '강의·인강',  color: '#7B1FA2' },
-  { name: '기출문제',   color: '#F57C00' },
-  { name: '산림자원직', color: '#2E7D32' },
-  { name: '학습 자료',  color: '#5D4037' },
-  { name: '커뮤니티',   color: '#00897B' },
-]
 const FALLBACK_COLOR = '#9aa'
-
-function categoryColor(name) {
-  const hit = DEFAULT_CATEGORIES.find((c) => c.name === name)
-  return hit ? hit.color : FALLBACK_COLOR
-}
 
 // 'gosi.kr' 같은 입력을 'https://gosi.kr'로 자동 보정
 function normalizeUrl(raw) {
@@ -33,6 +21,7 @@ export default function Links() {
   const [selectedCat, setSelectedCat] = useState('all')
   const [editId, setEditId] = useState(null)
   const [formOpen, setFormOpen] = useState(false)
+  const [catEditorOpen, setCatEditorOpen] = useState(false)
 
   // 폼 상태
   const [fName, setFName] = useState('')
@@ -42,15 +31,23 @@ export default function Links() {
   const [fNewCategory, setFNewCategory] = useState('') // "+ 새 카테고리…" 선택 시 입력
   const [fDescription, setFDescription] = useState('')
 
-  // 데이터에서 사용 중인 카테고리 추출 (기본 + 사용자 정의)
+  const linkCategories = data.linkCategories || []
+
+  // 카테고리명 → 색상 lookup (사용자가 편집 가능한 data.linkCategories 기반)
+  const categoryColor = (name) => {
+    const hit = linkCategories.find((c) => c.name === name)
+    return hit ? hit.color : FALLBACK_COLOR
+  }
+
+  // 등록된 카테고리 + 링크에서만 보이는 미등록 카테고리(폴백) 합치기
   const allCategories = useMemo(() => {
     const fromData = new Set((data.links || []).map((l) => l.category || '기타'))
     const merged = []
     const seen = new Set()
-    for (const c of DEFAULT_CATEGORIES) { merged.push(c.name); seen.add(c.name) }
+    for (const c of linkCategories) { merged.push(c.name); seen.add(c.name) }
     for (const c of fromData) if (!seen.has(c)) { merged.push(c); seen.add(c) }
     return merged
-  }, [data.links])
+  }, [data.links, linkCategories])
 
   // 카테고리별 개수
   const counts = useMemo(() => {
@@ -72,7 +69,8 @@ export default function Links() {
 
   const resetForm = () => {
     setFName(''); setFAlias(''); setFUrl(''); setFDescription('')
-    setFCategory(selectedCat !== 'all' && allCategories.includes(selectedCat) ? selectedCat : '시험 정보')
+    const fallback = linkCategories[0]?.name || '기타'
+    setFCategory(selectedCat !== 'all' && allCategories.includes(selectedCat) ? selectedCat : fallback)
     setFNewCategory('')
     setEditId(null)
   }
@@ -87,7 +85,7 @@ export default function Links() {
     setFAlias(l.alias || '')
     setFUrl(l.url || '')
     setFDescription(l.description || '')
-    const cat = l.category || '시험 정보'
+    const cat = l.category || (linkCategories[0]?.name || '기타')
     if (allCategories.includes(cat)) { setFCategory(cat); setFNewCategory('') }
     else { setFCategory('__new__'); setFNewCategory(cat) }
     setFormOpen(true)
@@ -167,7 +165,15 @@ export default function Links() {
       <div className="split">
         {/* 좌측: 카테고리 분할 */}
         <div className="card subj-list">
-          <div className="card-title">카테고리</div>
+          <div className="flex-between" style={{ marginBottom: 12 }}>
+            <div className="card-title" style={{ margin: 0 }}>카테고리</div>
+            <button
+              className="btn ghost sm"
+              onClick={() => setCatEditorOpen(true)}
+              title="카테고리 편집"
+              style={{ padding: '3px 9px' }}
+            >⚙️</button>
+          </div>
           <button
             className={'pick' + (selectedCat === 'all' ? ' active' : '')}
             onClick={() => setSelectedCat('all')}
@@ -271,6 +277,34 @@ export default function Links() {
           />)}
         </div>
       </div>
+
+      <CategoryEditor
+        open={catEditorOpen}
+        onClose={() => setCatEditorOpen(false)}
+        categories={linkCategories}
+        onSave={(next, renamedMap, deletedNames) => {
+          update((d) => {
+            const renamed = new Set(Object.keys(renamedMap))
+            const deleted = new Set(deletedNames)
+            const links = (d.links || []).map((l) => {
+              const cat = l.category || '기타'
+              if (renamed.has(cat)) return { ...l, category: renamedMap[cat] }
+              if (deleted.has(cat)) return { ...l, category: '기타' }
+              return l
+            })
+            return { ...d, linkCategories: next, links }
+          })
+          // 사이드바 선택 상태가 사라진 카테고리면 전체로 폴백
+          if (selectedCat !== 'all') {
+            const stillExists = next.some((c) => c.name === selectedCat) ||
+              renamedMap[selectedCat] // 이름이 바뀌었어도 보이게
+            if (!stillExists) setSelectedCat('all')
+            else if (renamedMap[selectedCat]) setSelectedCat(renamedMap[selectedCat])
+          }
+          setCatEditorOpen(false)
+          show('카테고리를 저장했어요 🗂️')
+        }}
+      />
 
       <Toast />
     </div>
