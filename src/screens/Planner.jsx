@@ -13,12 +13,20 @@ export default function Planner() {
   const daySessions = data.sessions.filter((s) => s.date === date)
   const studied = daySessions.reduce((a, s) => a + s.seconds, 0)
 
+  // 학습일 기준 시각 키 — 새벽 3시 이전 시각은 "다음날 새벽"(전날 학습일의 종반)으로 본다.
+  // 예: 22:00 → 1320, 02:00 → 1560 (1440+120). 22:00 시작 → 02:00 종료 세션이 자연스럽게 정렬됨.
+  const dayKey = (clockStr) => {
+    const m = hmToMin(clockStr)
+    if (m == null) return 99999
+    return m < 3 * 60 ? m + 24 * 60 : m
+  }
+
   // 시작 시각순 오름차순 정렬 (시각 없는 옛 기록은 맨 뒤로)
   const sortedSessions = [...daySessions].sort((a, b) => {
-    const am = hmToMin(a.start) ?? 99999
-    const bm = hmToMin(b.start) ?? 99999
+    const am = dayKey(a.start)
+    const bm = dayKey(b.start)
     if (am !== bm) return am - bm
-    return (hmToMin(a.end) ?? 99999) - (hmToMin(b.end) ?? 99999)
+    return dayKey(a.end) - dayKey(b.end)
   })
 
   const addTask = () => {
@@ -50,11 +58,13 @@ export default function Planner() {
   }
   const saveSession = () => {
     const sm = hmToMin(mStart)
-    const em = hmToMin(mEnd)
+    let em = hmToMin(mEnd)
     if (sm == null || em == null) {
       window.alert('시작·종료 시간을 입력해 주세요.')
       return
     }
+    // 자정을 넘기는 세션(예: 22:00 ~ 02:00) 은 종료에 24h 더해서 계산
+    if (em < sm) em += 24 * 60
     if (em - sm <= 0) {
       window.alert('종료 시간이 시작 시간보다 늦어야 해요.')
       return
@@ -170,7 +180,7 @@ export default function Planner() {
             const subj = getSubject(data, s.subjectId)
             const prev = sortedSessions[i - 1]
             const gap =
-              prev && prev.end && s.start ? hmToMin(s.start) - hmToMin(prev.end) : null
+              prev && prev.end && s.start ? dayKey(s.start) - dayKey(prev.end) : null
             return (
               <React.Fragment key={s.id}>
                 {gap != null && gap > 0 && (
