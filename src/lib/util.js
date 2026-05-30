@@ -1,6 +1,11 @@
 // ── 날짜 유틸 ────────────────────────────────────────────────
-export function dateStr(d = new Date()) {
-  const x = new Date(d)
+// 자정~새벽 3시 사이에 공부한 시간도 "어제"로 묶이도록 하루 경계를 새벽 3시로 잡는다.
+// 인자 없이 호출하면 "오늘(=새벽 3시 기준)"을 반환 — 02:59 까지는 전날, 03:00 부터 새 하루.
+// 명시적으로 Date 객체를 넣으면 원본 그대로 포매팅(애드데이즈/위크스타트 같은 내부 계산용).
+export const DAY_RESET_HOUR = 3
+export function dateStr(d) {
+  const x = d === undefined ? new Date() : new Date(d)
+  if (d === undefined) x.setHours(x.getHours() - DAY_RESET_HOUR)
   return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`
 }
 export function addDays(dStr, n) {
