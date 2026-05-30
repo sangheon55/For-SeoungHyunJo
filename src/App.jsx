@@ -12,6 +12,8 @@ import Rest from './screens/Rest.jsx'
 import Flashcards from './screens/Flashcards.jsx'
 import Search from './screens/Search.jsx'
 import Settings from './screens/Settings.jsx'
+import Secret, { HAS_SECRET } from './screens/Secret.jsx'
+import Epilogue from './screens/Epilogue.jsx'
 
 const NAV = [
   { id: 'home', label: '홈', ico: '🏡', C: Dashboard },
@@ -29,9 +31,14 @@ const NAV = [
   { id: 'settings', label: '설정', ico: '⚙️', C: Settings },
 ]
 
+const HIDDEN_NAV = [
+  ...(HAS_SECRET ? [{ id: 'secret', C: Secret }] : []),
+  { id: 'epilogue', C: Epilogue },
+]
+
 export default function App() {
   const [tab, setTab] = useState('home')
-  const cur = NAV.find((n) => n.id === tab) || NAV[0]
+  const cur = [...NAV, ...HIDDEN_NAV].find((n) => n.id === tab) || NAV[0]
   const Screen = cur.C
   return (
     <div className="app">
@@ -50,6 +57,24 @@ export default function App() {
             {n.label}
           </button>
         ))}
+        {HAS_SECRET && (
+          <button
+            className={'nav-item secret-nav' + (tab === 'secret' ? ' active' : '')}
+            onClick={() => setTab('secret')}
+            aria-label=""
+            title=""
+          >
+            <span className="ico">·</span>
+          </button>
+        )}
+        <button
+          className={'nav-item secret-nav' + (tab === 'epilogue' ? ' active' : '')}
+          onClick={() => setTab('epilogue')}
+          aria-label=""
+          title=""
+        >
+          <span className="ico">·</span>
+        </button>
         <div className="sidebar-foot">합격까지, 한 그루씩 🌱</div>
       </aside>
       <main className="main" key={tab}>

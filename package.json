@@ -1,7 +1,7 @@
 {
   "name": "seonghyeon-planner",
   "productName": "Seonghyeon Planner",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "private": true,
   "description": "조성현을 위한 5급 기술고시 합격 플래너",
   "main": "electron/main.cjs",

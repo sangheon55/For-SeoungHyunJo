@@ -691,3 +691,102 @@ label.fld input[type='file'] { padding: 4px; font-size: 12px; }
   20%  { background: #fff8e1; }
   100% { background: var(--card); }
 }
+
+/* ── 비밀 메뉴 진입점 (라벨 없음, 거의 안 보임) ────────── */
+.nav-item.secret-nav {
+  min-height: 0;
+  height: 16px;
+  padding: 2px 18px;
+  margin: 1px 0 0;
+  opacity: 0.08;
+  transition: opacity 0.25s ease;
+  cursor: pointer;
+}
+.nav-item.secret-nav:hover { opacity: 0.45; }
+.nav-item.secret-nav.active { opacity: 1; }
+.nav-item.secret-nav .ico {
+  font-size: 11px;
+  color: var(--green-700);
+}
+
+/* ── 비밀 페이지 ─────────────────────────────────────── */
+.secret-page {
+  max-width: 640px;
+  margin: 40px auto;
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.secret-card {
+  position: relative;
+  background-color: #fdfaf2;
+  background-image: linear-gradient(180deg, #fdfaf2 0%, #f3f8ec 100%);
+  border: 1px solid #e2e9d4;
+  border-radius: 18px;
+  padding: 36px 32px 30px;
+  box-shadow: 0 6px 24px rgba(76, 100, 60, 0.08);
+  color: #2b3826;
+  line-height: 1.85;
+  font-size: 15px;
+  font-weight: 700;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* 사진이 있을 때: 사진을 카드 배경으로 깔고, 위에 반투명 레이어로 가독성 확보 */
+.secret-card.has-bg {
+  background-image: var(--secret-bg);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  color: #1c2a18;
+  border-color: rgba(180, 200, 160, 0.4);
+  box-shadow: 0 8px 28px rgba(40, 60, 30, 0.18);
+}
+.secret-card.has-bg .secret-content {
+  text-shadow: 0 1px 2px rgba(255, 252, 240, 0.6);
+}
+.secret-card .secret-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(253, 250, 242, 0.68) 0%, rgba(243, 248, 236, 0.72) 100%);
+  backdrop-filter: blur(1px);
+  -webkit-backdrop-filter: blur(1px);
+  z-index: 0;
+  pointer-events: none;
+}
+.secret-card .secret-content {
+  position: relative;
+  z-index: 1;
+}
+
+.secret-card .secret-leaf {
+  font-size: 36px;
+  text-align: center;
+  margin-bottom: 4px;
+}
+.secret-card .secret-h {
+  text-align: center;
+  margin: 0 0 22px;
+  font-size: 24px;
+  color: #154a18;
+  font-weight: 900;
+  letter-spacing: -0.3px;
+}
+.secret-card .secret-body p {
+  margin: 0 0 18px;
+  font-weight: 700;
+}
+.secret-card .secret-body b {
+  color: #1f5e22;
+  font-weight: 900;
+}
+.secret-card .secret-sign {
+  margin-top: 26px;
+  text-align: right;
+  font-size: 13.5px;
+  color: #3a4a35;
+  font-style: italic;
+  font-weight: 800;
+}
