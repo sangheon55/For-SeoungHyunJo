@@ -97,11 +97,11 @@ npm run dist
 
 # 3) zip 압축
 Compress-Archive -Path "release\Seonghyeon Planner-win32-x64" `
-                 -DestinationPath "release\조성현 합격 플래너 v1.5.zip" -Force
+                 -DestinationPath "release\조성현 합격 플래너 v1.5.2.zip" -Force
 
 # 4) GitHub Release 생성 + zip 업로드 (gh CLI)
-gh release create v1.5.0 "release\조성현 합격 플래너 v1.5.zip" `
-   --title "v1.5 — <한 줄 요약>" `
+gh release create v1.5.2 "release\조성현 합격 플래너 v1.5.2.zip" `
+   --title "v1.5.2 — <한 줄 요약>" `
    --notes "<변경 사항 마크다운>"
 ```
 
@@ -155,6 +155,8 @@ npm run dist     # Windows 배포용 폴더 전체 빌드 (release/)
 | **v1.4.1** | ✅ 배포 | **자동 업데이트 안정성 강화**(한글 경로·파일 잠금 대응, robocopy 재시도 제한, 업데이트 로그 보기), **과목/자주 가는 곳 순서 변경(↑↓)** |
 | **v1.4.2~v1.4.7** | ✅ 배포 | 자동 업데이트 보안 차단(AV/AMSI) 대응 반복 — `.bat → PowerShell → EncodedCommand → cmd.exe` 순으로 우회 방식 진화, 진단 로그 다중화 |
 | **v1.5.0** | ✅ 배포 | **자주 가는 곳 카테고리 편집(이름·색상·순서·삭제)**, **쉼 ☕ 페이지**(가족·친구 사진 갤러리 + 취미 관리), 자동 업데이터 cmd.exe 기반 안정화 |
+| **v1.5.1** | ✅ 배포 | **하루 경계를 새벽 3시로 이동** — 자정~새벽 2:59 까지 공부한 시간이 어제 학습량으로 묶이도록 (오늘/통계/취미/오답복습 등 전 화면 일괄 반영) |
+| **v1.5.2** | ✅ 배포 | 플래너 직접 입력에서 **22:00~02:00 같은 자정 넘는 세션 허용**, **학습 타임라인 정렬·휴식 갭**도 새벽 3시 경계 기준으로 자연 정렬 |
 | **v1.6** | 🗓 구상 | 다크모드 |
 | **v2.0** | 💡 아이디어 | 면접 준비 체크리스트, 동기부여 위젯 |
 
