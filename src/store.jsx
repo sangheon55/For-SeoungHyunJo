@@ -41,7 +41,20 @@ const defaultData = {
     { id: 'e2', name: '원서 접수 마감', date: '2027-01-20' },
   ],
   dayNotes: {},     // { 'YYYY-MM-DD': '하루 돌아보기 메모' }
-  settings: { dailyGoalMin: 510, weeklyGoalMin: 3060 }, // 하루 8.5시간 · 주 51시간
+  flashcards: [],   // 플래시카드 — { id, subjectId, front, back, correctStreak, totalAttempts, lastReviewedAt, status, createdAt }
+  settings: {
+    dailyGoalMin: 510,            // 하루 8.5시간
+    weeklyGoalMin: 3060,          // 주 51시간
+    pomodoroFocusMin: 25,         // 포모도로 집중 시간(분)
+    pomodoroBreakMin: 5,          // 짧은 휴식(분)
+    pomodoroLongBreakMin: 15,     // 긴 휴식(분) — 4사이클 후
+    pomodoroCyclesPerLongBreak: 4,
+    startChecklist: [             // 학습 시작 체크리스트 — 사용자가 편집 가능
+      { id: 'cl1', text: '💧 물 준비됐어요' },
+      { id: 'cl2', text: '📱 휴대폰 멀리 놨어요' },
+      { id: 'cl3', text: '📚 책·자료 준비됐어요' },
+    ],
+  },
   wrongSettings: {
     intervals: [1, 3, 7, 14, 30], // 에빙하우스 5단계(일)
     resetOnMiss: true,            // 틀리면 1단계로 리셋
@@ -61,6 +74,7 @@ function mergeDefaults(loaded) {
     linkCategories: Array.isArray(loaded?.linkCategories) ? loaded.linkCategories : defaultData.linkCategories,
     photos: Array.isArray(loaded?.photos) ? loaded.photos : [],
     hobbies: Array.isArray(loaded?.hobbies) ? loaded.hobbies : [],
+    flashcards: Array.isArray(loaded?.flashcards) ? loaded.flashcards : [],
   }
 }
 const clone = (o) => JSON.parse(JSON.stringify(o))

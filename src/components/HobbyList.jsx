@@ -2,12 +2,14 @@ import React, { useState } from 'react'
 import { useStore, uid } from '../store.jsx'
 import { dateStr, addDays } from '../lib/util.js'
 import { useToast } from '../components/ui.jsx'
+import { useConfirm } from '../components/confirm.jsx'
 
 const STALE_DAYS = 7
 
 export default function HobbyList() {
   const { data, update } = useStore()
   const { show, Toast } = useToast()
+  const confirm = useConfirm()
   const hobbies = data.hobbies || []
 
   const [formOpen, setFormOpen] = useState(false)
@@ -63,8 +65,13 @@ export default function HobbyList() {
     show('오늘도 잘 했어요 ✨')
   }
 
-  const del = (h) => {
-    if (!window.confirm(`'${h.name}' 취미를 지울까요?`)) return
+  const del = async (h) => {
+    const ok = await confirm(`'${h.name}' 취미를 지울까요?`, {
+      title: '취미 삭제',
+      variant: 'danger',
+      confirmText: '삭제',
+    })
+    if (!ok) return
     update((d) => ({ ...d, hobbies: (d.hobbies || []).filter((x) => x.id !== h.id) }))
     show('지웠어요')
   }

@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react'
 import { useStore, uid } from '../store.jsx'
 import { CATEGORIES, PALETTE, useToast } from '../components/ui.jsx'
+import { useConfirm } from '../components/confirm.jsx'
 
 export default function Settings() {
   const { data, update, exportData, importData, isElectron } = useStore()
   const { show, Toast } = useToast()
+  const confirm = useConfirm()
 
   // 과목 추가 폼
   const [sName, setSName] = useState('')
@@ -32,9 +34,14 @@ export default function Settings() {
     setSName('')
     show('과목을 추가했어요 🌿')
   }
-  const delSubject = (id) => {
+  const delSubject = async (id) => {
     const s = data.subjects.find((x) => x.id === id)
-    if (!window.confirm(`'${s?.name}' 과목을 삭제할까요?\n(연결된 메모·기록은 '미지정'으로 남습니다)`)) return
+    const ok = await confirm(`'${s?.name}' 과목을 삭제할까요?\n(연결된 메모·기록은 '미지정' 으로 남아요)`, {
+      title: '과목 삭제',
+      variant: 'danger',
+      confirmText: '삭제',
+    })
+    if (!ok) return
     update((d) => ({ ...d, subjects: d.subjects.filter((x) => x.id !== id) }))
   }
   const moveSubject = (id, dir) => {
@@ -65,12 +72,61 @@ export default function Settings() {
   const setWeekGoal = (h) =>
     update((d) => ({ ...d, settings: { ...d.settings, weeklyGoalMin: Math.round(Number(h) * 60) } }))
 
+  // ── 학습 시작 체크리스트 편집 ─────────────────────────────
+  const [clText, setClText] = useState('')
+  const checklist = data.settings.startChecklist || []
+  const addChecklistItem = () => {
+    const v = clText.trim()
+    if (!v) return
+    update((d) => ({
+      ...d,
+      settings: {
+        ...d.settings,
+        startChecklist: [...(d.settings.startChecklist || []), { id: uid(), text: v }],
+      },
+    }))
+    setClText('')
+  }
+  const delChecklistItem = (id) =>
+    update((d) => ({
+      ...d,
+      settings: {
+        ...d.settings,
+        startChecklist: (d.settings.startChecklist || []).filter((c) => c.id !== id),
+      },
+    }))
+  const moveChecklistItem = (id, dir) =>
+    update((d) => {
+      const list = [...(d.settings.startChecklist || [])]
+      const idx = list.findIndex((c) => c.id === id)
+      const next = idx + dir
+      if (idx < 0 || next < 0 || next >= list.length) return d
+      ;[list[idx], list[next]] = [list[next], list[idx]]
+      return { ...d, settings: { ...d.settings, startChecklist: list } }
+    })
+
+  // ── 포모도로 설정 ───────────────────────────────────────
+  const setPomo = (key, val) =>
+    update((d) => ({
+      ...d,
+      settings: { ...d.settings, [key]: Math.max(1, Math.round(Number(val) || 0)) },
+    }))
+  const pomoFocus = data.settings.pomodoroFocusMin || 25
+  const pomoBreak = data.settings.pomodoroBreakMin || 5
+  const pomoLong = data.settings.pomodoroLongBreakMin || 15
+  const pomoCycles = data.settings.pomodoroCyclesPerLongBreak || 4
+
   const doExport = async () => {
     const ok = await exportData()
     show(ok ? '데이터를 내보냈어요 📤' : '내보내기를 취소했어요')
   }
   const doImport = async () => {
-    if (!window.confirm('데이터를 가져오면 현재 데이터를 덮어씁니다. 계속할까요?')) return
+    const proceed = await confirm('데이터를 가져오면 현재 데이터를 덮어써요.\n계속할까요?', {
+      title: '데이터 가져오기',
+      variant: 'danger',
+      confirmText: '덮어쓰기',
+    })
+    if (!proceed) return
     const ok = await importData()
     show(ok ? '데이터를 가져왔어요 📥' : '가져오기를 취소했어요')
   }
@@ -187,6 +243,80 @@ export default function Settings() {
         </div>
       </div>
 
+      {/* 학습 시작 체크리스트 */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-title">📋 학습 시작 체크리스트</div>
+        <div className="hint" style={{ marginBottom: 8 }}>
+          ▶ 시작 버튼을 누르기 전에 점검할 항목들이에요. 집중 진입 의식을 만들면 시작이 가벼워져요.
+        </div>
+        {checklist.map((c, i) => (
+          <div className="checklist-row" key={c.id}>
+            <span className="grow">{c.text}</span>
+            <button
+              className="btn ghost sm"
+              onClick={() => moveChecklistItem(c.id, -1)}
+              disabled={i === 0}
+              title="위로"
+              style={{ padding: '4px 8px' }}
+            >↑</button>
+            <button
+              className="btn ghost sm"
+              onClick={() => moveChecklistItem(c.id, +1)}
+              disabled={i === checklist.length - 1}
+              title="아래로"
+              style={{ padding: '4px 8px' }}
+            >↓</button>
+            <button className="btn danger sm" onClick={() => delChecklistItem(c.id)}>삭제</button>
+          </div>
+        ))}
+        {checklist.length === 0 && (
+          <div className="empty">체크리스트 항목이 없어요. 아래에서 추가해 주세요.</div>
+        )}
+        <div className="row section-gap" style={{ alignItems: 'flex-end' }}>
+          <label className="fld" style={{ flex: 1 }}>
+            새 항목
+            <input
+              type="text"
+              value={clText}
+              onChange={(e) => setClText(e.target.value)}
+              placeholder="예: ☕ 카페인 OK"
+              onKeyDown={(e) => e.key === 'Enter' && addChecklistItem()}
+            />
+          </label>
+          <button className="btn" onClick={addChecklistItem}>+ 추가</button>
+        </div>
+      </div>
+
+      {/* 포모도로 설정 */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-title">🍅 포모도로 설정</div>
+        <div className="hint" style={{ marginBottom: 10 }}>
+          학습 타이머의 포모도로 탭에서 사용할 시간을 설정해요. 변경하면 다음 사이클부터 적용됩니다.
+        </div>
+        <div className="row" style={{ alignItems: 'flex-end', gap: 12 }}>
+          <label className="fld">
+            🍅 집중 (분)
+            <input type="number" min={1} max={120} value={pomoFocus}
+              onChange={(e) => setPomo('pomodoroFocusMin', e.target.value)} style={{ width: 90 }} />
+          </label>
+          <label className="fld">
+            ☕ 짧은 휴식 (분)
+            <input type="number" min={1} max={60} value={pomoBreak}
+              onChange={(e) => setPomo('pomodoroBreakMin', e.target.value)} style={{ width: 90 }} />
+          </label>
+          <label className="fld">
+            🌳 긴 휴식 (분)
+            <input type="number" min={1} max={120} value={pomoLong}
+              onChange={(e) => setPomo('pomodoroLongBreakMin', e.target.value)} style={{ width: 90 }} />
+          </label>
+          <label className="fld">
+            긴 휴식 주기 (사이클)
+            <input type="number" min={2} max={10} value={pomoCycles}
+              onChange={(e) => setPomo('pomodoroCyclesPerLongBreak', e.target.value)} style={{ width: 90 }} />
+          </label>
+        </div>
+      </div>
+
       {/* 데이터 */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-title">💾 데이터</div>
@@ -218,6 +348,7 @@ export default function Settings() {
 
 // ── 업데이트 카드 ────────────────────────────────────────────
 function UpdateCard({ showToast }) {
+  const confirm = useConfirm()
   const [version, setVersion] = useState('')
   const [phase, setPhase] = useState('idle') // idle|checking|noupdate|found|downloading|ready|error
   const [info, setInfo] = useState(null)
@@ -266,7 +397,12 @@ function UpdateCard({ showToast }) {
   }
 
   const install = async () => {
-    if (!window.confirm('앱이 종료되고 새 버전으로 자동 교체됩니다.\n진행할까요?')) return
+    const ok = await confirm('앱이 종료되고 새 버전으로 자동 교체돼요.\n진행할까요?', {
+      title: '업데이트 적용',
+      icon: '⚡',
+      confirmText: '지금 적용',
+    })
+    if (!ok) return
     try {
       await window.plannerUpdater.install(extractedPath)
       // 성공 시 곧 앱 종료됨 — UI 반응 불필요

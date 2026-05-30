@@ -2,9 +2,11 @@ import React, { useState } from 'react'
 import { useStore, uid } from '../store.jsx'
 import { dateStr, addDays, prettyDate, hm, hmToMin } from '../lib/util.js'
 import { getSubject, SubjectTag } from '../components/ui.jsx'
+import { useConfirm } from '../components/confirm.jsx'
 
 export default function Planner() {
   const { data, update } = useStore()
+  const confirm = useConfirm()
   const [date, setDate] = useState(dateStr())
   const [text, setText] = useState('')
   const [subjectId, setSubjectId] = useState('')
@@ -96,8 +98,13 @@ export default function Planner() {
     setMStart(s.start || '')
     setMEnd(s.end || '')
   }
-  const delSession = (id) => {
-    if (!window.confirm('이 학습 기록을 삭제할까요?')) return
+  const delSession = async (id) => {
+    const ok = await confirm('이 학습 기록을 삭제할까요?', {
+      title: '학습 기록 삭제',
+      variant: 'danger',
+      confirmText: '삭제',
+    })
+    if (!ok) return
     update((d) => ({ ...d, sessions: d.sessions.filter((s) => s.id !== id) }))
     if (editId === id) resetForm()
   }

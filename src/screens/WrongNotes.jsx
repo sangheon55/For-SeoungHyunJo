@@ -5,6 +5,7 @@ import { useToast } from '../components/ui.jsx'
 import { dueToday, makeWrongAnswer, nextDueDate } from '../lib/ebbinghaus.js'
 import WrongForm from '../components/WrongForm.jsx'
 import QuizModal from '../components/QuizModal.jsx'
+import { useConfirm } from '../components/confirm.jsx'
 
 const FILTERS = [
   { id: 'today', label: '오늘 복습' },
@@ -22,6 +23,7 @@ const DIFF_ORDER = { 상: 0, 중: 1, 하: 2 }
 export default function WrongNotes() {
   const { data, update } = useStore()
   const { show, Toast } = useToast()
+  const confirm = useConfirm()
   const today = dateStr()
 
   const [subjectId, setSubjectId] = useState('all') // 'all' | subjectId
@@ -92,8 +94,13 @@ export default function WrongNotes() {
     closeForm()
   }
 
-  const del = (id) => {
-    if (!confirm('이 오답 기록을 삭제할까요?')) return
+  const del = async (id) => {
+    const ok = await confirm('이 오답 기록을 삭제할까요?', {
+      title: '오답 삭제',
+      variant: 'danger',
+      confirmText: '삭제',
+    })
+    if (!ok) return
     update((d) => ({ ...d, wrongAnswers: d.wrongAnswers.filter((w) => w.id !== id) }))
     show('삭제했어요')
   }

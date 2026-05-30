@@ -2,11 +2,13 @@ import React, { useRef, useState } from 'react'
 import { useStore, uid } from '../store.jsx'
 import { dateStr } from '../lib/util.js'
 import { useToast } from '../components/ui.jsx'
+import { useConfirm } from '../components/confirm.jsx'
 import { filesToImages } from '../lib/image.js'
 
 export default function PeopleGallery() {
   const { data, update } = useStore()
   const { show, Toast } = useToast()
+  const confirm = useConfirm()
   const photos = data.photos || []
 
   const fileRef = useRef()
@@ -44,8 +46,13 @@ export default function PeopleGallery() {
     }))
   }
 
-  const del = (p) => {
-    if (!window.confirm('이 사진을 지울까요?')) return
+  const del = async (p) => {
+    const ok = await confirm('이 사진을 지울까요?', {
+      title: '사진 삭제',
+      variant: 'danger',
+      confirmText: '삭제',
+    })
+    if (!ok) return
     update((d) => ({ ...d, photos: (d.photos || []).filter((x) => x.id !== p.id) }))
     show('지웠어요')
   }

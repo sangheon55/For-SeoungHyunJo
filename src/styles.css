@@ -45,7 +45,11 @@ input, select, textarea { font-family: inherit; }
   background: linear-gradient(180deg, var(--green-900), var(--green-800));
   color: #eaf3ea; display: flex; flex-direction: column;
   padding: 18px 12px;
+  overflow-y: auto;
 }
+/* 사이드바 자체 스크롤바 살짝 톤다운 */
+.sidebar::-webkit-scrollbar { width: 6px; }
+.sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
 .brand { padding: 6px 10px 16px; }
 .brand h1 { font-size: 17px; font-weight: 800; }
 .brand p { font-size: 11px; color: #9fc4a6; margin-top: 3px; }
@@ -89,6 +93,8 @@ input, select, textarea { font-family: inherit; }
 .btn.sm { padding: 5px 11px; font-size: 12px; }
 .btn.danger { background: #fff; color: var(--danger); border-color: #e7b8b2; }
 .btn.danger:hover { background: #fdeceb; }
+.btn.solid-danger { background: var(--danger); color: #fff; border-color: var(--danger); }
+.btn.solid-danger:hover { background: #a33323; border-color: #a33323; }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .btn-lg { padding: 12px 26px; font-size: 15px; border-radius: 11px; }
 
@@ -502,4 +508,186 @@ label.fld input[type='file'] { padding: 4px; font-size: 12px; }
 }
 .hobby-card .actions {
   display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
+}
+
+/* ── 학습 시작 체크리스트 (Timer 안) ──────────────────────── */
+.start-checklist {
+  background: var(--green-100);
+  border: 1px dashed var(--green-300);
+  border-radius: 11px;
+  padding: 10px 12px;
+  margin: 12px 0;
+}
+.start-checklist-head {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 6px;
+}
+.start-checklist-title {
+  font-size: 12px; font-weight: 700; color: var(--green-800);
+}
+.start-checklist-edit {
+  background: transparent; border: none; color: var(--green-700);
+  font-size: 11px; padding: 2px 6px; cursor: pointer;
+}
+.start-checklist-edit:hover { text-decoration: underline; }
+.start-checklist-items {
+  display: flex; flex-direction: column; gap: 4px;
+}
+.start-checklist-item {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; color: var(--text);
+  padding: 3px 4px; border-radius: 6px;
+  cursor: pointer; transition: 0.15s;
+}
+.start-checklist-item:hover { background: rgba(255, 255, 255, 0.6); }
+.start-checklist-item.done {
+  color: var(--green-700); text-decoration: line-through;
+  opacity: 0.7;
+}
+
+/* Settings 의 체크리스트 편집 행 */
+.checklist-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 4px; border-bottom: 1px dashed var(--line);
+  font-size: 13px;
+}
+.checklist-row:last-of-type { border-bottom: none; }
+.checklist-row .grow { flex: 1; }
+
+/* ── 포모도로 ─────────────────────────────────────────── */
+.pomo-phase {
+  text-align: center;
+  font-size: 14px; font-weight: 700;
+  margin: 8px 0 2px;
+}
+.pomo-display {
+  font-size: 60px; font-weight: 800; color: var(--green-900);
+  text-align: center; font-variant-numeric: tabular-nums; letter-spacing: 2px;
+  margin: 6px 0 14px;
+}
+
+/* ── 플래시카드 ───────────────────────────────────────── */
+.flashcard {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 50px 30px;
+  margin: 16px 0;
+  box-shadow: 0 4px 16px rgba(27, 60, 46, 0.1);
+  cursor: pointer;
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  transition: 0.2s;
+}
+.flashcard:hover { box-shadow: 0 6px 22px rgba(27, 60, 46, 0.15); }
+.flashcard.flipped {
+  background: var(--green-100);
+  border-color: var(--green-300);
+  cursor: default;
+}
+.flashcard-label {
+  font-size: 11px; color: var(--muted); font-weight: 600;
+  margin-bottom: 14px; text-transform: uppercase; letter-spacing: 1px;
+}
+.flashcard-text {
+  font-size: 22px; line-height: 1.55; color: var(--text);
+  font-weight: 600; white-space: pre-wrap; word-break: break-word;
+  max-width: 100%;
+}
+.flashcard.flipped .flashcard-text {
+  color: var(--green-900);
+}
+.flashcard-actions {
+  display: flex; justify-content: center; gap: 14px;
+  margin-top: 12px;
+}
+.flashcard-actions .btn-lg {
+  min-width: 120px;
+}
+
+/* ── 통합 검색 ─────────────────────────────────────────── */
+.search-input {
+  width: 100%;
+  font-size: 16px;
+  padding: 12px 16px;
+  border: 2px solid var(--green-300);
+  border-radius: 10px;
+  background: #fff;
+}
+.search-input:focus {
+  outline: none;
+  border-color: var(--green-700);
+}
+.search-row {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 10px 4px;
+  border-top: 1px dashed var(--line);
+}
+.search-row:first-of-type { border-top: none; }
+.search-row > .tag { flex-shrink: 0; margin-top: 2px; }
+.search-row-body { flex: 1; min-width: 0; }
+.search-row-title {
+  font-size: 14px; font-weight: 600;
+  color: var(--green-900); line-height: 1.4;
+  margin-bottom: 3px;
+  white-space: pre-wrap; word-break: break-word;
+}
+.search-row-snippet {
+  font-size: 12px; color: #34433a; line-height: 1.55;
+  margin-bottom: 2px;
+  white-space: pre-wrap; word-break: break-word;
+}
+.search-mark {
+  background: #fff176; color: #4a3a00;
+  padding: 0 2px; border-radius: 3px;
+  font-weight: 600;
+}
+.search-photo-thumb {
+  width: 44px; height: 44px; object-fit: cover;
+  border-radius: 6px; border: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+/* ── 확인 다이얼로그 (window.confirm 대체) ───────────────── */
+.confirm-modal {
+  background: #fff;
+  border-radius: 14px;
+  max-width: 380px;
+  width: 90vw;
+  padding: 26px 28px 20px;
+  text-align: center;
+  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.35);
+  animation: confirmPop 0.18s ease-out;
+}
+@keyframes confirmPop {
+  from { transform: scale(0.94); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+.confirm-icon { font-size: 38px; line-height: 1; margin-bottom: 8px; }
+.confirm-title {
+  font-size: 17px; font-weight: 700;
+  color: var(--green-900); margin-bottom: 6px;
+}
+.confirm-message {
+  font-size: 14px; color: var(--text);
+  line-height: 1.6; white-space: pre-wrap;
+  margin-bottom: 20px;
+}
+.confirm-actions {
+  display: flex; gap: 10px; justify-content: center;
+}
+.confirm-actions .btn { min-width: 96px; padding: 9px 18px; }
+
+/* ── 포모도로 단계 전환 flash ──────────────────────────── */
+.pomo-flash {
+  animation: pomoFlash 0.9s ease-out;
+}
+@keyframes pomoFlash {
+  0%   { background: var(--card); }
+  20%  { background: #fff8e1; }
+  100% { background: var(--card); }
 }

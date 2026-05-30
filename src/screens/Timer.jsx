@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useStore, uid } from '../store.jsx'
 import { dateStr, hms, hm, inRange, treeInfo, clockHM } from '../lib/util.js'
 import { useToast } from '../components/ui.jsx'
+import StartChecklist from '../components/StartChecklist.jsx'
+import Pomodoro from '../components/Pomodoro.jsx'
 
 // 공용 스톱워치 훅
 // persistKey를 주면 상태를 localStorage에 저장한다.
@@ -53,7 +55,7 @@ function useStopwatch(persistKey) {
   }
 }
 
-export default function Timer() {
+export default function Timer({ go }) {
   const [tab, setTab] = useState('daily')
   return (
     <div>
@@ -61,19 +63,24 @@ export default function Timer() {
       <div className="page-sub">공부 시간을 과목별로 측정하고, 나무를 키워보세요 🌱</div>
       <div className="tabs">
         <button className={'tab' + (tab === 'daily' ? ' active' : '')} onClick={() => setTab('daily')}>
-          ① 일일 공부량 타이머
+          ⏱ 일일 공부량
+        </button>
+        <button className={'tab' + (tab === 'pomo' ? ' active' : '')} onClick={() => setTab('pomo')}>
+          🍅 포모도로
         </button>
         <button className={'tab' + (tab === 'watch' ? ' active' : '')} onClick={() => setTab('watch')}>
-          ② 일반 스톱워치
+          🕒 스톱워치
         </button>
       </div>
-      {tab === 'daily' ? <DailyTimer /> : <PlainStopwatch />}
+      {tab === 'daily' && <DailyTimer go={go} />}
+      {tab === 'pomo' && <Pomodoro go={go} />}
+      {tab === 'watch' && <PlainStopwatch />}
     </div>
   )
 }
 
 // ── ① 일일 공부량 타이머 ─────────────────────────────────────
-function DailyTimer() {
+function DailyTimer({ go }) {
   const { data, update } = useStore()
   const { show, Toast } = useToast()
   const sw = useStopwatch('sh_timer_daily')
@@ -177,6 +184,11 @@ function DailyTimer() {
         </label>
 
         <div className="timer-display">{hms(sw.elapsed)}</div>
+
+        {!sw.running && sw.elapsed < 1 && (
+          <StartChecklist onConfigure={go ? () => go('settings') : undefined} />
+        )}
+
         <div className="timer-btns">
           {!sw.running ? (
             <button className="btn btn-lg" onClick={handleStart} disabled={!subjectId}>▶ 시작</button>

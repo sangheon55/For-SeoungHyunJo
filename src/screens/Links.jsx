@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { useStore, uid } from '../store.jsx'
 import { dateStr } from '../lib/util.js'
 import { useToast } from '../components/ui.jsx'
+import { useConfirm } from '../components/confirm.jsx'
 import CategoryEditor from '../components/CategoryEditor.jsx'
 
 const FALLBACK_COLOR = '#9aa'
@@ -17,6 +18,7 @@ function normalizeUrl(raw) {
 export default function Links() {
   const { data, update } = useStore()
   const { show, Toast } = useToast()
+  const confirm = useConfirm()
 
   const [selectedCat, setSelectedCat] = useState('all')
   const [editId, setEditId] = useState(null)
@@ -117,8 +119,13 @@ export default function Links() {
     closeForm()
   }
 
-  const del = (l) => {
-    if (!window.confirm(`'${l.alias || l.name}' 을(를) 삭제할까요?`)) return
+  const del = async (l) => {
+    const ok = await confirm(`'${l.alias || l.name}' 을(를) 삭제할까요?`, {
+      title: '사이트 삭제',
+      variant: 'danger',
+      confirmText: '삭제',
+    })
+    if (!ok) return
     update((d) => ({ ...d, links: d.links.filter((x) => x.id !== l.id) }))
     show('삭제했어요')
   }
