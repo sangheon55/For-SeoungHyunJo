@@ -1,13 +1,24 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { useStore } from '../store.jsx'
 import { dateStr, addDays, prettyDate, dDay, hm, streak, treeInfo } from '../lib/util.js'
 import { encouragements, pickEncouragement } from '../data/encouragements.js'
 import { getSubject, SubjectTag } from '../components/ui.jsx'
 import { dueToday } from '../lib/ebbinghaus.js'
+import { pushProgress, pullCheers } from '../lib/friendBridge.js'
+import { MEMBER_NAMES } from '../lib/friendMembers.js'
 
 export default function Dashboard({ go }) {
   const { data, update } = useStore()
   const today = dateStr()
+  const [cheers, setCheers] = useState([])
+
+  // 앱을 열 때마다 오늘 진행상황을 동상이몽으로 밀어보내고, 받은 응원 메시지를 가져온다.
+  // 실패해도 화면엔 아무 표시 없이 조용히 넘어간다(오프라인/권한 문제 등).
+  useEffect(() => {
+    pushProgress(data)
+    pullCheers().then(setCheers)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const cheer = pickEncouragement(encouragements, today)
 
@@ -43,6 +54,19 @@ export default function Dashboard({ go }) {
         <div className="lbl">💌 오늘의 응원</div>
         <div className="msg">{cheer}</div>
       </div>
+
+      {cheers.length > 0 && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-title">📨 받은 응원 메시지</div>
+          {cheers.map((c) => (
+            <div key={c.id} className="item" style={{ alignItems: 'flex-start' }}>
+              <span className="grow">
+                <b>{MEMBER_NAMES[c.fromMemberId] || '누군가'}</b>: {c.text}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="grid g2" style={{ marginBottom: 16 }}>
         {/* 나무 위젯 */}
