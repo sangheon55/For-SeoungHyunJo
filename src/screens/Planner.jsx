@@ -4,7 +4,7 @@ import { dateStr, addDays, prettyDate, hm, hmToMin } from '../lib/util.js'
 import { getSubject, SubjectTag } from '../components/ui.jsx'
 import { useConfirm } from '../components/confirm.jsx'
 
-export default function Planner() {
+export default function Planner({ lite = false }) {
   const { data, update } = useStore()
   const confirm = useConfirm()
   const [date, setDate] = useState(dateStr())
@@ -208,7 +208,7 @@ export default function Planner() {
                     <div className="tl-dur">{hm(s.seconds)}</div>
                   </div>
                   <div className="tl-actions">
-                    <button className="btn ghost sm" onClick={() => editSession(s)}>수정</button>
+                    {!lite && <button className="btn ghost sm" onClick={() => editSession(s)}>수정</button>}
                     <button className="btn danger sm" onClick={() => delSession(s.id)}>삭제</button>
                   </div>
                 </div>
@@ -217,38 +217,40 @@ export default function Planner() {
           })}
         </div>
 
-        {/* 직접 추가 / 수정 폼 */}
-        <div className="section-gap" style={{ borderTop: '1px solid var(--line)', paddingTop: 14 }}>
-          <div className="card-title" style={{ fontSize: 13 }}>
-            {editId ? '✏️ 학습 기록 수정' : '✋ 학습 기록 직접 추가'}
+        {/* 직접 추가 / 수정 폼 — 모바일 lite에서는 숨김(데스크탑 전용) */}
+        {!lite && (
+          <div className="section-gap" style={{ borderTop: '1px solid var(--line)', paddingTop: 14 }}>
+            <div className="card-title" style={{ fontSize: 13 }}>
+              {editId ? '✏️ 학습 기록 수정' : '✋ 학습 기록 직접 추가'}
+            </div>
+            <div className="row" style={{ alignItems: 'flex-end' }}>
+              <label className="fld">
+                과목
+                <select value={mSubject} onChange={(e) => setMSubject(e.target.value)}>
+                  {data.subjects.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="fld">
+                시작
+                <input type="time" value={mStart} onChange={(e) => setMStart(e.target.value)} />
+              </label>
+              <label className="fld">
+                종료
+                <input type="time" value={mEnd} onChange={(e) => setMEnd(e.target.value)} />
+              </label>
+              <button className="btn" onClick={saveSession}>{editId ? '수정 저장' : '+ 추가'}</button>
+              {editId && (
+                <button className="btn ghost" onClick={resetForm}>취소</button>
+              )}
+            </div>
+            <div className="hint section-gap">
+              타이머를 깜빡했거나 기록이 날아갔을 때 직접 입력하세요.
+              직접 입력·수정한 기록은 타임라인에 ✋ 로 표시됩니다.
+            </div>
           </div>
-          <div className="row" style={{ alignItems: 'flex-end' }}>
-            <label className="fld">
-              과목
-              <select value={mSubject} onChange={(e) => setMSubject(e.target.value)}>
-                {data.subjects.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-            </label>
-            <label className="fld">
-              시작
-              <input type="time" value={mStart} onChange={(e) => setMStart(e.target.value)} />
-            </label>
-            <label className="fld">
-              종료
-              <input type="time" value={mEnd} onChange={(e) => setMEnd(e.target.value)} />
-            </label>
-            <button className="btn" onClick={saveSession}>{editId ? '수정 저장' : '+ 추가'}</button>
-            {editId && (
-              <button className="btn ghost" onClick={resetForm}>취소</button>
-            )}
-          </div>
-          <div className="hint section-gap">
-            타이머를 깜빡했거나 기록이 날아갔을 때 직접 입력하세요.
-            직접 입력·수정한 기록은 타임라인에 ✋ 로 표시됩니다.
-          </div>
-        </div>
+        )}
       </div>
 
       {/* ── 하루 돌아보기 메모 ───────────────────────────────── */}

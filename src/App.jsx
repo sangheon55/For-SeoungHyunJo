@@ -1,85 +1,40 @@
 import React, { useState } from 'react'
-import Dashboard from './screens/Dashboard.jsx'
-import Planner from './screens/Planner.jsx'
-import Timer from './screens/Timer.jsx'
-import Memos from './screens/Memos.jsx'
-import Reviews from './screens/Reviews.jsx'
-import WrongNotes from './screens/WrongNotes.jsx'
-import Links from './screens/Links.jsx'
-import Stats from './screens/Stats.jsx'
-import Forest from './screens/Forest.jsx'
-import Rest from './screens/Rest.jsx'
-import Flashcards from './screens/Flashcards.jsx'
-import Search from './screens/Search.jsx'
-import Settings from './screens/Settings.jsx'
-import Secret, { HAS_SECRET } from './screens/Secret.jsx'
-import Epilogue from './screens/Epilogue.jsx'
-
-const NAV = [
-  { id: 'home', label: '홈', ico: '🏡', C: Dashboard },
-  { id: 'search', label: '통합 검색', ico: '🔍', C: Search },
-  { id: 'planner', label: '플래너', ico: '📅', C: Planner },
-  { id: 'timer', label: '학습 타이머', ico: '⏱️', C: Timer },
-  { id: 'memos', label: '과목 메모', ico: '📝', C: Memos },
-  { id: 'reviews', label: '회독 관리', ico: '📚', C: Reviews },
-  { id: 'wrong', label: '오답노트', ico: '❌', C: WrongNotes },
-  { id: 'flashcards', label: '플래시카드', ico: '🃏', C: Flashcards },
-  { id: 'links', label: '자주 가는 곳', ico: '🔗', C: Links },
-  { id: 'rest', label: '쉼', ico: '☕', C: Rest },
-  { id: 'stats', label: '통계', ico: '📊', C: Stats },
-  { id: 'forest', label: '나의 숲', ico: '🌲', C: Forest },
-  { id: 'settings', label: '설정', ico: '⚙️', C: Settings },
-]
-
-const HIDDEN_NAV = [
-  ...(HAS_SECRET ? [{ id: 'secret', C: Secret }] : []),
-  { id: 'epilogue', C: Epilogue },
-]
+import { useStore } from './store.jsx'
+import useIsMobile from './lib/useIsMobile.js'
+import DesktopShell from './shells/DesktopShell.jsx'
+import MobileShell from './shells/MobileShell.jsx'
+import SessionRecovery from './components/SessionRecovery.jsx'
 
 export default function App() {
+  const { data, update } = useStore()
   const [tab, setTab] = useState('home')
-  const cur = [...NAV, ...HIDDEN_NAV].find((n) => n.id === tab) || NAV[0]
-  const Screen = cur.C
+  const [sessionForceDesktop, setSessionForceDesktop] = useState(false)
+  const isNarrow = useIsMobile()
+
+  const go = (id) => setTab(id)
+
+  const forceDesktopPersisted = !!data.settings.forceDesktopLayout
+  const useMobileShell = isNarrow && !forceDesktopPersisted && !sessionForceDesktop
+
+  // 게이트 카드의 "항상 데스크탑으로 보기" — 설정에 영구 저장 + 이번 세션도 즉시 반영
+  const alwaysDesktop = () => {
+    update((d) => ({ ...d, settings: { ...d.settings, forceDesktopLayout: true } }))
+    setSessionForceDesktop(true)
+  }
+
   return (
-    <div className="app">
-      <aside className="sidebar">
-        <div className="brand">
-          <h1>🌲 합격 플래너</h1>
-          <p>조성현 · 5급 기술고시(산림자원직)</p>
-        </div>
-        {NAV.map((n) => (
-          <button
-            key={n.id}
-            className={'nav-item' + (n.id === tab ? ' active' : '')}
-            onClick={() => setTab(n.id)}
-          >
-            <span className="ico">{n.ico}</span>
-            {n.label}
-          </button>
-        ))}
-        {HAS_SECRET && (
-          <button
-            className={'nav-item secret-nav' + (tab === 'secret' ? ' active' : '')}
-            onClick={() => setTab('secret')}
-            aria-label=""
-            title=""
-          >
-            <span className="ico">·</span>
-          </button>
-        )}
-        <button
-          className={'nav-item secret-nav' + (tab === 'epilogue' ? ' active' : '')}
-          onClick={() => setTab('epilogue')}
-          aria-label=""
-          title=""
-        >
-          <span className="ico">·</span>
-        </button>
-        <div className="sidebar-foot">합격까지, 한 그루씩 🌱</div>
-      </aside>
-      <main className="main" key={tab}>
-        <Screen go={setTab} />
-      </main>
-    </div>
+    <>
+      <SessionRecovery go={go} />
+      {useMobileShell ? (
+        <MobileShell
+          tab={tab}
+          go={go}
+          onViewAsDesktop={() => setSessionForceDesktop(true)}
+          onAlwaysDesktop={alwaysDesktop}
+        />
+      ) : (
+        <DesktopShell tab={tab} go={go} />
+      )}
+    </>
   )
 }

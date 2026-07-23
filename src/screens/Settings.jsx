@@ -317,6 +317,26 @@ export default function Settings() {
         </div>
       </div>
 
+      {/* 모바일 화면 */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-title">📱 모바일 화면</div>
+        <div className="hint" style={{ marginBottom: 10 }}>
+          태블릿·폴더블처럼 좁은 화면에서도 항상 데스크탑 사이드바 레이아웃으로 보고 싶다면 켜세요.
+          모바일 하단 탭 없이 지금처럼 사이드바로 모든 화면을 이용할 수 있어요.
+        </div>
+        <label className="item" style={{ cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            className="checkbox"
+            checked={!!data.settings.forceDesktopLayout}
+            onChange={(e) =>
+              update((d) => ({ ...d, settings: { ...d.settings, forceDesktopLayout: e.target.checked } }))
+            }
+          />
+          <span className="grow">데스크탑 레이아웃 강제</span>
+        </label>
+      </div>
+
       {/* 데이터 */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-title">💾 데이터</div>

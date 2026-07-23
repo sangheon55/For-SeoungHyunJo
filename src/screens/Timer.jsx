@@ -4,6 +4,8 @@ import { dateStr, hms, hm, inRange, treeInfo, clockHM } from '../lib/util.js'
 import { useToast } from '../components/ui.jsx'
 import StartChecklist from '../components/StartChecklist.jsx'
 import Pomodoro from '../components/Pomodoro.jsx'
+import { useDailySession } from '../lib/dailySession.js'
+import { pushProgress } from '../lib/friendBridge.js'
 
 // 공용 스톱워치 훅
 // persistKey를 주면 상태를 localStorage에 저장한다.
@@ -83,7 +85,7 @@ export default function Timer({ go }) {
 function DailyTimer({ go }) {
   const { data, update } = useStore()
   const { show, Toast } = useToast()
-  const sw = useStopwatch('sh_timer_daily')
+  const dailySession = useDailySession()
   const today = dateStr()
   // 선택 과목도 함께 보존 — 타이머가 유지되면 과목도 그대로여야 한다
   const [subjectId, setSubjectId] = useState(() => {
@@ -95,53 +97,40 @@ function DailyTimer({ go }) {
   useEffect(() => {
     if (subjectId) localStorage.setItem('sh_timer_subject', subjectId)
   }, [subjectId])
+  // 복구된 세션(activeSession)이 있으면 그 세션의 과목으로 표시를 맞춘다
+  useEffect(() => {
+    if (dailySession.sessionSubjectId && dailySession.sessionSubjectId !== subjectId) {
+      setSubjectId(dailySession.sessionSubjectId)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dailySession.sessionSubjectId])
   const [range, setRange] = useState('today')
   const [celebrate, setCelebrate] = useState(null)
-
-  // 타이머를 처음 켠 시각(타임라인 기록용) — 탭 이동에도 보존
-  const [startClock, setStartClock] = useState(() => localStorage.getItem('sh_timer_started') || '')
-  useEffect(() => {
-    if (startClock) localStorage.setItem('sh_timer_started', startClock)
-    else localStorage.removeItem('sh_timer_started')
-  }, [startClock])
-  const handleStart = () => {
-    if (!startClock) setStartClock(new Date().toISOString())
-    sw.start()
-  }
 
   const todaySaved = data.sessions
     .filter((s) => s.date === today)
     .reduce((a, s) => a + s.seconds, 0)
-  const liveToday = todaySaved + (sw.running ? sw.elapsed : sw.elapsed)
+  const liveToday = todaySaved + dailySession.elapsed
   const goalSec = (data.settings.dailyGoalMin || 510) * 60
   const goalPct = Math.min(100, Math.round((liveToday / goalSec) * 100))
 
-  const saveSession = () => {
-    const secs = Math.round(sw.elapsed)
-    if (secs < 1) {
-      sw.setRunning(false)
-      sw.setElapsed(0)
-      setStartClock('')
-      return
-    }
+  const saveSession = async () => {
+    const result = await dailySession.stop()
+    if (!result) return
+    const secs = Math.round(result.elapsedSec)
+    if (secs < 1) return
     const beforeHours = data.sessions.reduce((a, s) => a + s.seconds, 0) / 3600
     const afterHours = beforeHours + secs / 3600
     const before = treeInfo(beforeHours)
     const after = treeInfo(afterHours)
     const endC = clockHM()
-    const startC = startClock
-      ? clockHM(startClock)
+    const startC = result.startClock
+      ? clockHM(result.startClock)
       : clockHM(new Date(Date.now() - secs * 1000))
-    update((d) => ({
-      ...d,
-      sessions: [
-        ...d.sessions,
-        { id: uid(), subjectId, date: today, seconds: secs, start: startC, end: endC, manual: false, mock: false },
-      ],
-    }))
-    sw.setRunning(false)
-    sw.setElapsed(0)
-    setStartClock('')
+    const newSession = { id: uid(), subjectId, date: today, seconds: secs, start: startC, end: endC, manual: false, mock: false }
+    const nextData = { ...data, sessions: [...data.sessions, newSession] }
+    update(() => nextData)
+    pushProgress(nextData)
     if (after.completed > before.completed) {
       setCelebrate({ emoji: '🌲', title: '큰나무 완성!', msg: '한 그루가 너의 숲에 심어졌어요. 정말 대단해요, 성현아!' })
     } else if (after.idx > before.idx) {
@@ -183,19 +172,21 @@ function DailyTimer({ go }) {
           </select>
         </label>
 
-        <div className="timer-display">{hms(sw.elapsed)}</div>
+        <div className="timer-display">{hms(dailySession.elapsed)}</div>
 
-        {!sw.running && sw.elapsed < 1 && (
+        {!dailySession.running && dailySession.elapsed < 1 && (
           <StartChecklist onConfigure={go ? () => go('settings') : undefined} />
         )}
 
         <div className="timer-btns">
-          {!sw.running ? (
-            <button className="btn btn-lg" onClick={handleStart} disabled={!subjectId}>▶ 시작</button>
+          {dailySession.status === 'paused' ? (
+            <button className="btn btn-lg" onClick={dailySession.resume}>▶ 계속</button>
+          ) : !dailySession.running ? (
+            <button className="btn btn-lg" onClick={() => dailySession.start(subjectId)} disabled={!subjectId}>▶ 시작</button>
           ) : (
-            <button className="btn btn-lg ghost" onClick={sw.pause}>⏸ 일시정지</button>
+            <button className="btn btn-lg ghost" onClick={dailySession.pause}>⏸ 일시정지</button>
           )}
-          <button className="btn btn-lg ghost" onClick={saveSession} disabled={sw.elapsed < 1}>
+          <button className="btn btn-lg ghost" onClick={saveSession} disabled={dailySession.elapsed < 1}>
             ■ 종료·저장
           </button>
         </div>
