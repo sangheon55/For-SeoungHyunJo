@@ -1,9 +1,7 @@
-// 앱 아이콘(icon.ico) 생성기 — 외부 도구 없이 Node 내장 기능만 사용.
+// 절차적 PNG 아이콘 렌더러 — 외부 도구 없이 Node 내장 기능만 사용.
+// 원래 electron/generate-icon.cjs 에 있던 렌더링 코어를 그대로 옮긴 것.
 // 녹색 라운드 배경 + 흰색 체크마크("합격 플래너" 테마).
-// 수정 후 `node electron/generate-icon.cjs` 로 다시 생성하면 된다.
 const zlib = require('zlib')
-const fs = require('fs')
-const path = require('path')
 
 // ── CRC32 (PNG 청크용) ──────────────────────────────────────
 const CRC = (() => {
@@ -126,32 +124,4 @@ function encodePNG(size, rgba) {
   ])
 }
 
-// ── ICO 컨테이너 (각 엔트리에 PNG 임베드) ───────────────────
-const SIZES = [256, 128, 64, 48, 32, 16]
-const pngs = SIZES.map((s) => encodePNG(s, render(s)))
-
-const header = Buffer.alloc(6)
-header.writeUInt16LE(0, 0) // reserved
-header.writeUInt16LE(1, 2) // type: icon
-header.writeUInt16LE(SIZES.length, 4)
-
-const entries = []
-let offset = 6 + 16 * SIZES.length
-SIZES.forEach((s, idx) => {
-  const e = Buffer.alloc(16)
-  e[0] = s >= 256 ? 0 : s // width
-  e[1] = s >= 256 ? 0 : s // height
-  e[2] = 0 // color count
-  e[3] = 0 // reserved
-  e.writeUInt16LE(1, 4) // color planes
-  e.writeUInt16LE(32, 6) // bits per pixel
-  e.writeUInt32LE(pngs[idx].length, 8)
-  e.writeUInt32LE(offset, 12)
-  offset += pngs[idx].length
-  entries.push(e)
-})
-
-const ico = Buffer.concat([header, ...entries, ...pngs])
-const out = path.join(__dirname, 'icon.ico')
-fs.writeFileSync(out, ico)
-console.log(`생성 완료: ${out} (${ico.length} bytes, ${SIZES.length} sizes)`)
+module.exports = { crc32, segDist, sample, render, chunk, encodePNG }

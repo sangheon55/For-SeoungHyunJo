@@ -1,87 +1,10 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
+import { mergeDefaults } from './storage/defaultData.js'
+import { loadFlatData, persistDiff, persistFullReplace } from './storage/legacyMapping.js'
+import { migrateLegacyLocalStorageIfNeeded } from './storage/migrateLegacyLocalStorage.js'
+import { startRealtimeSync, stopRealtimeSync, pushAllToFirestore } from './storage/firestoreSync.js'
 
-const KEY = 'seonghyeon_planner_v1'
-
-// ── 기본 데이터 ──────────────────────────────────────────────
-const defaultData = {
-  version: 1,
-  subjects: [
-    { id: 's1', name: '언어논리', category: 'PSAT', color: '#2E7D32' },
-    { id: 's2', name: '자료해석', category: 'PSAT', color: '#43A047' },
-    { id: 's3', name: '상황판단', category: 'PSAT', color: '#66BB6A' },
-    { id: 's4', name: '조림학', category: '전공', color: '#1B5E20' },
-    { id: 's5', name: '임업경영학', category: '전공', color: '#33691E' },
-    { id: 's6', name: '영어', category: '영어', color: '#00897B' },
-    { id: 's7', name: '한국사', category: '한국사', color: '#5D4037' },
-  ],
-  tasks: [],        // { id, date, subjectId, text, done }
-  sessions: [],     // { id, subjectId, date, seconds, start:'HH:MM', end:'HH:MM', manual, mock }
-  memos: [],        // { id, subjectId, title, body, updatedAt }
-  reviews: [],      // { id, name, subjectId, totalChapters, doneChapters, targetRounds, round }
-  wrongAnswers: [], // 오답노트 — 자세한 스키마는 lib/ebbinghaus.js 참고
-  linkCategories: [ // 자주 가는 사이트의 카테고리 — 사용자가 추가/이름변경/삭제/순서변경 가능
-    { name: '시험 정보',  color: '#1976D2' },
-    { name: '강의·인강',  color: '#7B1FA2' },
-    { name: '기출문제',   color: '#F57C00' },
-    { name: '산림자원직', color: '#2E7D32' },
-    { name: '학습 자료',  color: '#5D4037' },
-    { name: '커뮤니티',   color: '#00897B' },
-  ],
-  links: [          // 자주 가는 사이트 모음 — { id, name, alias, url, category, description, createdAt }
-    { id: 'lk1', name: '사이버국가고시센터', alias: '', url: 'https://gosi.kr',                 category: '시험 정보',  description: '시험 일정·공고·합격자 발표가 여기에서 나와요',                     createdAt: '2026-05-24' },
-    { id: 'lk2', name: '인사혁신처',         alias: '', url: 'https://www.mpm.go.kr',          category: '시험 정보',  description: '5급 공무원 시험 주관 부처',                                       createdAt: '2026-05-24' },
-    { id: 'lk3', name: '국립산림과학원',     alias: '', url: 'https://nifos.forest.go.kr',     category: '산림자원직', description: '산림자원직 전공 자료·연구 보고서',                                createdAt: '2026-05-24' },
-    { id: 'lk4', name: '산림청',             alias: '', url: 'https://www.forest.go.kr',      category: '산림자원직', description: '산림청 정책·통계',                                                 createdAt: '2026-05-24' },
-    { id: 'lk5', name: '나무위키',           alias: '', url: 'https://namu.wiki',              category: '학습 자료',  description: '개념 빠르게 훑을 때',                                              createdAt: '2026-05-24' },
-  ],
-  photos: [],       // 가족·친구 사진 — { id, src(dataURL), caption, addedAt }
-  hobbies: [],      // 취미 목록 — { id, name, emoji, note, lastDoneAt }
-  examDates: [
-    { id: 'e1', name: '1차 시험(PSAT)', date: '2027-03-06' },
-    { id: 'e2', name: '원서 접수 마감', date: '2027-01-20' },
-  ],
-  dayNotes: {},     // { 'YYYY-MM-DD': '하루 돌아보기 메모' }
-  flashcards: [],   // 플래시카드 — { id, subjectId, front, back, correctStreak, totalAttempts, lastReviewedAt, status, createdAt }
-  settings: {
-    dailyGoalMin: 510,            // 하루 8.5시간
-    weeklyGoalMin: 3060,          // 주 51시간
-    pomodoroFocusMin: 25,         // 포모도로 집중 시간(분)
-    pomodoroBreakMin: 5,          // 짧은 휴식(분)
-    pomodoroLongBreakMin: 15,     // 긴 휴식(분) — 4사이클 후
-    pomodoroCyclesPerLongBreak: 4,
-    startChecklist: [             // 학습 시작 체크리스트 — 사용자가 편집 가능
-      { id: 'cl1', text: '💧 물 준비됐어요' },
-      { id: 'cl2', text: '📱 휴대폰 멀리 놨어요' },
-      { id: 'cl3', text: '📚 책·자료 준비됐어요' },
-    ],
-  },
-  wrongSettings: {
-    intervals: [1, 3, 7, 14, 30], // 에빙하우스 5단계(일)
-    resetOnMiss: true,            // 틀리면 1단계로 리셋
-  },
-}
-
-// 새 버전에서 추가된 키를 기존 데이터에 채워 넣는다(주간 업데이트 호환).
-function mergeDefaults(loaded) {
-  if (!loaded || typeof loaded !== 'object') return clone(defaultData)
-  return {
-    ...defaultData,
-    ...loaded,
-    settings: { ...defaultData.settings, ...(loaded.settings || {}) },
-    wrongSettings: { ...defaultData.wrongSettings, ...(loaded.wrongSettings || {}) },
-    wrongAnswers: Array.isArray(loaded?.wrongAnswers) ? loaded.wrongAnswers : [],
-    links: Array.isArray(loaded?.links) ? loaded.links : defaultData.links,
-    linkCategories: Array.isArray(loaded?.linkCategories) ? loaded.linkCategories : defaultData.linkCategories,
-    photos: Array.isArray(loaded?.photos) ? loaded.photos : [],
-    hobbies: Array.isArray(loaded?.hobbies) ? loaded.hobbies : [],
-    flashcards: Array.isArray(loaded?.flashcards) ? loaded.flashcards : [],
-  }
-}
-const clone = (o) => JSON.parse(JSON.stringify(o))
-
-export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-3)
-
-const isElectron = () => typeof window !== 'undefined' && !!window.plannerStore
+export const uid = () => crypto.randomUUID()
 
 // ── Context ─────────────────────────────────────────────────
 const Ctx = createContext(null)
@@ -93,32 +16,38 @@ export function StoreProvider({ children }) {
   useEffect(() => {
     let alive = true
     ;(async () => {
-      let loaded = null
-      if (isElectron()) {
-        loaded = await window.plannerStore.load()
-      } else {
-        try { loaded = JSON.parse(localStorage.getItem(KEY)) } catch { loaded = null }
-      }
+      const imported = await migrateLegacyLocalStorageIfNeeded()
+      const loaded = await loadFlatData()
       if (alive) {
         setData(mergeDefaults(loaded))
         ready.current = true
       }
+      // 레거시 localStorage에서 실제로 뭔가 가져왔을 때만 업로드 — 매 기동마다가 아니라
+      if (imported) pushAllToFirestore().catch((e) => console.warn('[sync] push after migrate failed', e))
     })()
     return () => { alive = false }
   }, [])
 
-  // 변경될 때마다 저장(파일 또는 localStorage)
+  // W5-lite: Firestore 실시간 동기화. 위 로컬 로드 effect와 독립적으로 즉시 리스너를 건다.
+  // 원격 변경이 로컬 Dexie에 반영될 때마다 다시 읽어서 setData — Dexie 읽기는 로컬이라 싸다.
   useEffect(() => {
-    if (!data || !ready.current) return
-    if (isElectron()) window.plannerStore.save(data)
-    else localStorage.setItem(KEY, JSON.stringify(data))
-  }, [data])
+    const reconcileFromLocal = async () => {
+      const loaded = await loadFlatData()
+      setData(mergeDefaults(loaded))
+    }
+    startRealtimeSync(reconcileFromLocal)
+    return () => stopRealtimeSync()
+  }, [])
 
-  const update = (patch) =>
-    setData((d) => (typeof patch === 'function' ? patch(d) : { ...d, ...patch }))
+  const update = (patch) => {
+    setData((prev) => {
+      const next = typeof patch === 'function' ? patch(prev) : { ...prev, ...patch }
+      persistDiff(prev, next).catch((e) => console.warn('[store] persist failed', e))
+      return next
+    })
+  }
 
   const exportData = async () => {
-    if (isElectron()) return window.plannerStore.exportTo()
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
@@ -128,11 +57,6 @@ export function StoreProvider({ children }) {
   }
 
   const importData = async () => {
-    if (isElectron()) {
-      const result = await window.plannerStore.importFrom()
-      if (result) { setData(mergeDefaults(result)); return true }
-      return false
-    }
     return new Promise((resolve) => {
       const input = document.createElement('input')
       input.type = 'file'
@@ -141,9 +65,16 @@ export function StoreProvider({ children }) {
         const file = input.files[0]
         if (!file) return resolve(false)
         const reader = new FileReader()
-        reader.onload = () => {
-          try { setData(mergeDefaults(JSON.parse(reader.result))); resolve(true) }
-          catch { resolve(false) }
+        reader.onload = async () => {
+          try {
+            const merged = mergeDefaults(JSON.parse(reader.result))
+            await persistFullReplace(merged)
+            setData(merged)
+            pushAllToFirestore().catch((e) => console.warn('[sync] push after import failed', e))
+            resolve(true)
+          } catch {
+            resolve(false)
+          }
         }
         reader.readAsText(file)
       }
@@ -156,7 +87,7 @@ export function StoreProvider({ children }) {
   }
 
   return (
-    <Ctx.Provider value={{ data, update, exportData, importData, isElectron: isElectron() }}>
+    <Ctx.Provider value={{ data, update, exportData, importData, isElectron: false }}>
       {children}
     </Ctx.Provider>
   )

@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/planner/:path*", "destination": "/:path*" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
