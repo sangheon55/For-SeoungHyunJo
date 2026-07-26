@@ -1,9 +1,7 @@
 import Dexie from 'dexie'
 import { ENTITIES } from './types.js'
 
-export const db = new Dexie('PlannerDB')
-
-db.version(1).stores({
+const schemaV1 = {
   sessions: 'id, updatedAt, deletedAt, date, subjectId',
   tasks:    'id, updatedAt, deletedAt, date, subjectId',
   notes:    'id, updatedAt, deletedAt, subjectId',
@@ -17,13 +15,24 @@ db.version(1).stores({
   kv:       'id, updatedAt, deletedAt, key',
   // meta: 로컬 전용 부기 테이블(마이그레이션 완료 플래그 등). ENTITIES에 없고, repository로 노출되지 않는다.
   meta:     'key',
-})
+}
 
-// v2: activeSession 테이블 추가 — 진행 중인 일일 타이머의 기기-로컬 상태(복구용).
-// meta와 마찬가지로 ENTITIES에 없고 repository를 거치지 않는다(동기화 대상 아님).
-db.version(2).stores({
-  activeSession: 'id',
-})
+function createDatabase(name) {
+  const instance = new Dexie(name)
+  instance.version(1).stores(schemaV1)
+  instance.version(2).stores({ activeSession: 'id' })
+  return instance
+}
+
+export let db = createDatabase('PlannerDB')
+
+export function configureLocalDatabase(userId = null) {
+  const safeId = userId ? userId.replace(/[^a-zA-Z0-9_-]/g, '_') : null
+  const targetName = safeId ? `PlannerDB_${safeId}` : 'PlannerDB'
+  if (db.name === targetName) return
+  db.close()
+  db = createDatabase(targetName)
+}
 
 function table(entity) {
   if (!ENTITIES.includes(entity)) throw new Error(`Unknown entity: ${entity}`)

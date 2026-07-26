@@ -1,0 +1,67 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function invited() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/allowedUsers/$(request.auth.uid))
+        && get(/databases/$(database)/documents/allowedUsers/$(request.auth.uid)).data.enabled == true;
+    }
+
+    function owner() {
+      return invited()
+        && get(/databases/$(database)/documents/allowedUsers/$(request.auth.uid)).data.role == 'owner';
+    }
+
+    function bootstrapEmail() {
+      return signedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in [
+          'owo2002@gmail.com',
+          'shjo1218@gmail.com'
+        ];
+    }
+
+    function legacyMigrator() {
+      return invited()
+        && get(/databases/$(database)/documents/allowedUsers/$(request.auth.uid)).data.canMigrateLegacy == true;
+    }
+
+    match /allowedUsers/{userId} {
+      allow read: if signedIn() && request.auth.uid == userId;
+      allow create: if request.auth.uid == userId
+        && bootstrapEmail()
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.enabled == true
+        && (
+          (request.auth.token.email == 'owo2002@gmail.com'
+            && request.resource.data.role == 'owner'
+            && request.resource.data.canMigrateLegacy == true)
+          ||
+          (request.auth.token.email == 'shjo1218@gmail.com'
+            && request.resource.data.role == 'user'
+            && request.resource.data.canMigrateLegacy == true)
+        );
+      allow update, delete: if false;
+    }
+
+    match /users/{userId}/{document=**} {
+      allow read, write: if invited() && request.auth.uid == userId;
+    }
+
+    // 이전이 끝날 때까지 owner가 기존 공용 컬렉션을 읽을 수만 있다.
+    // 쓰기는 차단하여 새 변경이 다시 공용 경로에 생기지 않게 한다.
+    match /{legacyCollection}/{documentId} {
+      allow read: if (owner() || legacyMigrator()) && legacyCollection.matches('planner_.*');
+      allow write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

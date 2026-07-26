@@ -1,0 +1,83 @@
+.ishigami-layer {
+  position: relative;
+  min-height: 360px;
+  margin-bottom: 18px;
+  overflow: hidden;
+  isolation: isolate;
+  color: #edf2f7;
+  border: 1px solid rgba(95, 119, 153, .55);
+  border-radius: 22px;
+  background: #10151e;
+  box-shadow: 0 20px 48px rgba(18, 25, 36, .24);
+}
+.ishigami-bg,
+.ishigami-shade { position: absolute; inset: 0; }
+.ishigami-bg {
+  z-index: 0;
+  background: var(--ishigami-bg-url) center 46% / cover no-repeat;
+  filter: brightness(.66) saturate(.72);
+}
+.ishigami-layer.room-night .ishigami-bg { filter: brightness(.7) saturate(.78); }
+.ishigami-shade {
+  z-index: 1;
+  background:
+    linear-gradient(90deg, rgba(10, 15, 24, .9) 0%, rgba(14, 21, 32, .66) 48%, rgba(10, 15, 24, .08) 78%),
+    linear-gradient(0deg, rgba(8, 12, 19, .72), transparent 62%);
+}
+.ishigami-character {
+  position: absolute;
+  z-index: 2;
+  top: 12px;
+  right: clamp(-24px, 1vw, 18px);
+  bottom: auto;
+  width: min(43%, 390px);
+  height: calc(100% + 92px);
+  object-fit: contain;
+  object-position: center top;
+  filter: drop-shadow(0 18px 22px rgba(0, 0, 0, .42));
+}
+.ishigami-dialogue {
+  position: relative;
+  z-index: 3;
+  width: min(57%, 620px);
+  padding: 58px 34px 30px;
+}
+.ishigami-name {
+  margin-bottom: 15px;
+  color: #91afd2;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .12em;
+}
+.ishigami-dialogue p {
+  margin: 0 0 16px;
+  font-size: clamp(17px, 2vw, 23px);
+  font-weight: 700;
+  line-height: 1.6;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, .5);
+}
+.ishigami-dialogue small {
+  display: block;
+  margin-bottom: 12px;
+  color: #c8d2df;
+}
+.ishigami-dialogue .btn.ghost {
+  color: #e5edf7;
+  border-color: rgba(169, 194, 224, .5);
+  background: rgba(12, 20, 31, .55);
+}
+@media (max-width: 700px) {
+  .ishigami-layer { min-height: 500px; }
+  .ishigami-character {
+    top: 175px;
+    right: 50%;
+    width: 76%;
+    height: 410px;
+    opacity: .86;
+    transform: translateX(50%);
+  }
+  .ishigami-dialogue { width: auto; padding: 30px 24px 300px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ishigami-character { transition: none; }
+}

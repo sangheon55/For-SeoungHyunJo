@@ -27,6 +27,7 @@ export const routes = [
   { id: 'search', path: '/search', mobile: 'lite' },
   { id: 'forest', path: '/forest', mobile: 'lite' },
   { id: 'settings', path: '/settings', mobile: 'lite' },
+  { id: 'version', path: '/updates', mobile: true },
   // '/import' — W2 범위(사용자 요청으로 제외), 화면 자체가 아직 없어 표에서 제외
 ]
 

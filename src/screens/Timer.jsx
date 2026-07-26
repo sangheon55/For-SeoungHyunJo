@@ -1,11 +1,22 @@
-import React, { useEffect, useRef, useState } from 'react'
-import { useStore, uid } from '../store.jsx'
-import { dateStr, hms, hm, inRange, treeInfo, clockHM } from '../lib/util.js'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { useStore } from '../store.jsx'
+import { uid } from '../lib/id.js'
+import { dateStr, hms, hm, inRange, treeInfo, clockHM, streak } from '../lib/util.js'
 import { useToast } from '../components/ui.jsx'
 import StartChecklist from '../components/StartChecklist.jsx'
 import Pomodoro from '../components/Pomodoro.jsx'
 import { useDailySession } from '../lib/dailySession.js'
 import { pushProgress } from '../lib/friendBridge.js'
+import KaguyaLayer from '../kaguya/KaguyaLayer.jsx'
+import { currentTimeOfDay, selectDialogue, timerEndKey, timerStartKey } from '../kaguya/dialogueSelector.js'
+import { generateFujiwaraInterrupt, generateKaguyaDialogue } from '../kaguya/kaguyaApi.js'
+import {
+  decideFujiwaraInterrupt,
+  fallbackFujiwaraSequence,
+  getFujiwaraEventType,
+  normalizeFujiwaraSequence,
+  recordFujiwaraInterrupt,
+} from '../kaguya/fujiwaraInterrupt.js'
 
 // 공용 스톱워치 훅
 // persistKey를 주면 상태를 localStorage에 저장한다.
@@ -62,7 +73,6 @@ export default function Timer({ go }) {
   return (
     <div>
       <div className="page-title">학습 타이머</div>
-      <div className="page-sub">공부 시간을 과목별로 측정하고, 나무를 키워보세요 🌱</div>
       <div className="tabs">
         <button className={'tab' + (tab === 'daily' ? ' active' : '')} onClick={() => setTab('daily')}>
           ⏱ 일일 공부량
@@ -106,7 +116,22 @@ function DailyTimer({ go }) {
   }, [dailySession.sessionSubjectId])
   const [range, setRange] = useState('today')
   const [celebrate, setCelebrate] = useState(null)
-
+  const [sessionActionPending, setSessionActionPending] = useState(false)
+  const [kaguyaLine, setKaguyaLine] = useState(() => selectDialogue('timer.idle'))
+  const [fujiwaraGuestVisible, setFujiwaraGuestVisible] = useState(false)
+  const [fujiwaraGuestExiting, setFujiwaraGuestExiting] = useState(false)
+  const [fujiwaraCutInVisible, setFujiwaraCutInVisible] = useState(false)
+  const [fujiwaraInterruptBusy, setFujiwaraInterruptBusy] = useState(false)
+  const [devInterruptType, setDevInterruptType] = useState('two_hours')
+  const [devInterruptUseAi, setDevInterruptUseAi] = useState(true)
+  const seenLineIdsRef = useRef([kaguyaLine.id])
+  const generatedLineRequestRef = useRef(0)
+  const generatedLineControllerRef = useRef(null)
+  const interruptControllerRef = useRef(null)
+  const interruptTimersRef = useRef([])
+  const interruptRestoreLineRef = useRef(null)
+  const sessionActionPendingRef = useRef(false)
+  const kaguyaEnabled = data.settings.kaguyaEnabled !== false
   const todaySaved = data.sessions
     .filter((s) => s.date === today)
     .reduce((a, s) => a + s.seconds, 0)
@@ -114,29 +139,241 @@ function DailyTimer({ go }) {
   const goalSec = (data.settings.dailyGoalMin || 510) * 60
   const goalPct = Math.min(100, Math.round((liveToday / goalSec) * 100))
 
-  const saveSession = async () => {
-    const result = await dailySession.stop()
-    if (!result) return
-    const secs = Math.round(result.elapsedSec)
-    if (secs < 1) return
-    const beforeHours = data.sessions.reduce((a, s) => a + s.seconds, 0) / 3600
-    const afterHours = beforeHours + secs / 3600
-    const before = treeInfo(beforeHours)
-    const after = treeInfo(afterHours)
-    const endC = clockHM()
-    const startC = result.startClock
-      ? clockHM(result.startClock)
-      : clockHM(new Date(Date.now() - secs * 1000))
-    const newSession = { id: uid(), subjectId, date: today, seconds: secs, start: startC, end: endC, manual: false, mock: false }
-    const nextData = { ...data, sessions: [...data.sessions, newSession] }
-    update(() => nextData)
-    pushProgress(nextData)
-    if (after.completed > before.completed) {
-      setCelebrate({ emoji: '🌲', title: '큰나무 완성!', msg: '한 그루가 너의 숲에 심어졌어요. 정말 대단해요, 성현아!' })
-    } else if (after.idx > before.idx) {
-      setCelebrate({ emoji: after.stage.emoji, title: `${after.stage.name}(으)로 성장!`, msg: '꾸준함이 나무를 키웠어요 🌿' })
+  const cancelFujiwaraInterrupt = useCallback(({ updateUi = true } = {}) => {
+    interruptControllerRef.current?.abort()
+    interruptControllerRef.current = null
+    interruptTimersRef.current.forEach((timerId) => window.clearTimeout(timerId))
+    interruptTimersRef.current = []
+    if (updateUi) {
+      setFujiwaraGuestVisible(false)
+      setFujiwaraGuestExiting(false)
+      setFujiwaraCutInVisible(false)
+      setFujiwaraInterruptBusy(false)
+      if (interruptRestoreLineRef.current) {
+        setKaguyaLine(interruptRestoreLineRef.current)
+      }
+    }
+    interruptRestoreLineRef.current = null
+  }, [])
+
+  useEffect(() => () => {
+    generatedLineControllerRef.current?.abort()
+    cancelFujiwaraInterrupt({ updateUi: false })
+  }, [cancelFujiwaraInterrupt])
+
+  const showKaguyaLine = useCallback((key, variables = {}) => {
+    const line = selectDialogue(key, {
+      seenLineIds: seenLineIdsRef.current,
+      variables,
+    })
+    if (line.id !== 'fallback') {
+      seenLineIdsRef.current = [...seenLineIdsRef.current, line.id]
+    }
+    setKaguyaLine(line)
+    return line
+  }, [])
+
+  const playFujiwaraSequence = useCallback((beats, restoreLine) => {
+    interruptTimersRef.current.forEach((timerId) => window.clearTimeout(timerId))
+    interruptTimersRef.current = []
+    interruptRestoreLineRef.current = restoreLine
+    setFujiwaraInterruptBusy(true)
+    setFujiwaraGuestExiting(false)
+    setFujiwaraGuestVisible(true)
+
+    beats.forEach((beat) => {
+      const timerId = window.setTimeout(() => {
+        setKaguyaLine({
+          id: `fujiwara-interrupt-${Date.now()}-${beat.character}`,
+          key: 'timer.fujiwara-interrupt',
+          char: beat.character,
+          face: beat.face,
+          text: beat.text,
+          inner: beat.inner,
+        })
+      }, beat.delayMs)
+      interruptTimersRef.current.push(timerId)
+    })
+
+    const lastDelay = beats.at(-1)?.delayMs || 0
+    const exitTimerId = window.setTimeout(() => {
+      setFujiwaraGuestExiting(true)
+    }, lastDelay + 4_000)
+    const restoreTimerId = window.setTimeout(() => {
+      setFujiwaraGuestVisible(false)
+      setFujiwaraGuestExiting(false)
+      setKaguyaLine(restoreLine)
+      setFujiwaraInterruptBusy(false)
+      interruptRestoreLineRef.current = null
+      interruptTimersRef.current = []
+    }, lastDelay + 4_500)
+    interruptTimersRef.current.push(exitTimerId)
+    interruptTimersRef.current.push(restoreTimerId)
+  }, [])
+
+  const startFujiwaraInterrupt = useCallback(async ({
+    seconds,
+    subject,
+    restoreLine,
+    previousEventId,
+    reverse = false,
+    eventTypeOverride,
+    forceFallback = false,
+    minimumDelayMs = 3_000,
+    recordState,
+    eventId,
+  }) => {
+    cancelFujiwaraInterrupt()
+    const controller = new AbortController()
+    interruptControllerRef.current = controller
+    interruptRestoreLineRef.current = restoreLine
+    setFujiwaraInterruptBusy(true)
+    const nextStreakDays = streak([...data.sessions, { date: today, seconds }])
+    const eventType = eventTypeOverride || getFujiwaraEventType({
+      seconds,
+      hour: new Date().getHours(),
+      streakDays: nextStreakDays,
+    })
+    const fallback = fallbackFujiwaraSequence(seconds, { eventType, reverse })
+    const context = {
+      eventType,
+      reverse,
+      subject,
+      sessionMinutes: Math.round(seconds / 60),
+      todayMinutes: Math.round((todaySaved + seconds) / 60),
+      streakDays: nextStreakDays,
+      timeOfDay: currentTimeOfDay(),
+      previousLines: previousEventId ? [previousEventId] : [],
+    }
+
+    const minimumDelay = new Promise((resolve) => window.setTimeout(resolve, minimumDelayMs))
+    const [generated] = await Promise.all([
+      forceFallback
+        ? Promise.resolve(null)
+        : generateFujiwaraInterrupt(context, { signal: controller.signal }),
+      minimumDelay,
+    ])
+    if (controller.signal.aborted) return
+    const beats = normalizeFujiwaraSequence(generated, fallback)
+    if (recordState && eventId) {
+      recordFujiwaraInterrupt(
+        window.localStorage,
+        today,
+        recordState,
+        eventId,
+        beats[0]?.text,
+      )
+    }
+    if (reverse) {
+      setFujiwaraCutInVisible(true)
+      const cutInTimerId = window.setTimeout(() => {
+        setFujiwaraCutInVisible(false)
+        playFujiwaraSequence(beats, restoreLine)
+      }, 1_100)
+      interruptTimersRef.current.push(cutInTimerId)
     } else {
-      show(`${hm(secs)} 기록 완료! 🌱`)
+      playFujiwaraSequence(beats, restoreLine)
+    }
+    if (interruptControllerRef.current === controller) interruptControllerRef.current = null
+  }, [cancelFujiwaraInterrupt, data.sessions, playFujiwaraSequence, today, todaySaved])
+
+  const replaceWithGeneratedLine = async (context) => {
+    const requestId = ++generatedLineRequestRef.current
+    generatedLineControllerRef.current?.abort()
+    const controller = new AbortController()
+    generatedLineControllerRef.current = controller
+    const generated = await generateKaguyaDialogue(context, { signal: controller.signal })
+    if (generated && requestId === generatedLineRequestRef.current) {
+      setKaguyaLine((current) => ({ ...current, ...generated, id: `ai-${Date.now()}` }))
+    }
+    if (generatedLineControllerRef.current === controller) {
+      generatedLineControllerRef.current = null
+    }
+  }
+
+  const beginSessionAction = () => {
+    if (sessionActionPendingRef.current) return false
+    sessionActionPendingRef.current = true
+    setSessionActionPending(true)
+    return true
+  }
+
+  const endSessionAction = () => {
+    sessionActionPendingRef.current = false
+    setSessionActionPending(false)
+  }
+
+  const saveSession = async () => {
+    if (!beginSessionAction()) return
+    try {
+      cancelFujiwaraInterrupt()
+      const result = await dailySession.stop()
+      if (!result) return
+      const secs = Math.round(result.elapsedSec)
+      if (secs < 1) return
+      const beforeHours = data.sessions.reduce((a, s) => a + s.seconds, 0) / 3600
+      const afterHours = beforeHours + secs / 3600
+      const before = treeInfo(beforeHours)
+      const after = treeInfo(afterHours)
+      const endC = clockHM()
+      const startC = result.startClock
+        ? clockHM(result.startClock)
+        : clockHM(new Date(Date.now() - secs * 1000))
+      const newSession = { id: uid(), subjectId, date: today, seconds: secs, start: startC, end: endC, manual: false, mock: false }
+      const nextData = update((current) => ({
+        ...current,
+        sessions: current.sessions.some((session) => session.id === newSession.id)
+          ? current.sessions
+          : [...current.sessions, newSession],
+      }))
+      if (!nextData) throw new Error('학습 데이터를 불러오지 못해 세션을 저장할 수 없습니다.')
+      pushProgress(nextData)
+      const subject = data.subjects.find((s) => s.id === subjectId)
+      const endDialogueKey = timerEndKey(secs)
+      const endLine = showKaguyaLine(endDialogueKey, {
+        subject: subject?.name || '공부',
+        duration: hm(secs),
+      })
+      const interrupt = decideFujiwaraInterrupt({
+        seconds: secs,
+        today,
+        storage: window.localStorage,
+        enabled: kaguyaEnabled && data.settings.fujiwaraInterruptEnabled !== false,
+      })
+      if (interrupt.trigger) {
+        const eventId = secs >= 2 * 60 * 60
+          ? 'fujiwara-interrupt-two-hours'
+          : secs >= 60 * 60
+            ? 'fujiwara-interrupt-one-hour'
+            : 'fujiwara-interrupt-break'
+        void startFujiwaraInterrupt({
+          seconds: secs,
+          subject: subject?.name || '공부',
+          restoreLine: endLine,
+          previousEventId: interrupt.state.lastLine,
+          reverse: interrupt.reverse,
+          recordState: interrupt.state,
+          eventId,
+        })
+      }
+      // 2시간 이상 달성 대사는 표정과 문구가 정해진 특별 이벤트이므로
+      // AI 생성 대사로 덮어쓰지 않는다.
+      if (!interrupt.trigger && endDialogueKey !== 'timer.end.impressive') {
+        replaceWithGeneratedLine({
+          event: endDialogueKey,
+          subject: subject?.name || '공부',
+          duration: hm(secs),
+        })
+      }
+      if (after.completed > before.completed) {
+        setCelebrate({ emoji: '🌲', title: '큰나무 완성!', msg: '한 그루가 너의 숲에 심어졌어요. 정말 대단해요, 성현아!' })
+      } else if (after.idx > before.idx) {
+        setCelebrate({ emoji: after.stage.emoji, title: `${after.stage.name}(으)로 성장!`, msg: '꾸준함이 나무를 키웠어요 🌿' })
+      } else {
+        show(`${hm(secs)} 기록 완료! 🌱`)
+      }
+    } finally {
+      endSessionAction()
     }
   }
 
@@ -152,8 +389,76 @@ function DailyTimer({ go }) {
   })
   const maxSec = Math.max(1, ...subjTotals.map((s) => s.sec))
 
+  const startSession = async () => {
+    if (!beginSessionAction()) return
+    try {
+      cancelFujiwaraInterrupt()
+      const subject = data.subjects.find((s) => s.id === subjectId)
+      showKaguyaLine(timerStartKey(), {
+        subject: subject?.name || '공부',
+      })
+      await dailySession.start(subjectId)
+      replaceWithGeneratedLine({
+        event: timerStartKey(),
+        subject: subject?.name || '공부',
+      })
+    } finally {
+      endSessionAction()
+    }
+  }
+
+  const previewFujiwaraInterrupt = ({ reverse = false } = {}) => {
+    const subject = data.subjects.find((item) => item.id === subjectId)
+    const secondsByType = {
+      short_break: 25 * 60,
+      one_hour: 60 * 60,
+      two_hours: 2 * 60 * 60,
+      late_night: 30 * 60,
+      streak: 30 * 60,
+    }
+    const restoreLine = {
+      id: 'dev-fujiwara-preview-kaguya',
+      key: 'timer.end.impressive',
+      char: 'kaguya',
+      face: 'smug',
+      text: '제법이네요.',
+      inner: '(두 시간 이상 집중하다니… 솔직히 감탄했어.)',
+    }
+    setKaguyaLine(restoreLine)
+    void startFujiwaraInterrupt({
+      seconds: secondsByType[devInterruptType] || 2 * 60 * 60,
+      subject: subject?.name || '공부',
+      restoreLine,
+      previousEventId: 'dev-preview',
+      reverse,
+      eventTypeOverride: devInterruptType,
+      forceFallback: !devInterruptUseAi,
+      minimumDelayMs: 500,
+    })
+  }
+
   return (
     <div className="grid g2">
+      {kaguyaEnabled && (
+        <KaguyaLayer
+          face={kaguyaLine.face}
+          text={kaguyaLine.text}
+          inner={kaguyaLine.inner}
+          speaker={kaguyaLine.char === 'fujiwara' ? 'fujiwara' : 'kaguya'}
+          guestVisible={fujiwaraGuestVisible}
+          guestExiting={fujiwaraGuestExiting}
+          cutInVisible={fujiwaraCutInVisible}
+          active={dailySession.running}
+          studyContext={{
+            subject: data.subjects.find((subject) => subject.id === subjectId)?.name || '공부',
+            running: dailySession.running,
+            sessionMinutes: Math.round(dailySession.elapsed / 60),
+            todayMinutes: Math.round(liveToday / 60),
+            goalMinutes: Math.round(goalSec / 60),
+            goalPercent: goalPct,
+          }}
+        />
+      )}
       <div className="card">
         <div className="card-title">⏱ 측정</div>
         <div className="flex-between" style={{ marginBottom: 6 }}>
@@ -182,17 +487,64 @@ function DailyTimer({ go }) {
           {dailySession.status === 'paused' ? (
             <button className="btn btn-lg" onClick={dailySession.resume}>▶ 계속</button>
           ) : !dailySession.running ? (
-            <button className="btn btn-lg" onClick={() => dailySession.start(subjectId)} disabled={!subjectId}>▶ 시작</button>
+            <button
+              className="btn btn-lg"
+              onClick={startSession}
+              disabled={!subjectId || sessionActionPending || fujiwaraInterruptBusy}
+            >
+              ▶ 시작
+            </button>
           ) : (
             <button className="btn btn-lg ghost" onClick={dailySession.pause}>⏸ 일시정지</button>
           )}
-          <button className="btn btn-lg ghost" onClick={saveSession} disabled={dailySession.elapsed < 1}>
+          <button className="btn btn-lg ghost" onClick={saveSession} disabled={dailySession.elapsed < 1 || sessionActionPending}>
             ■ 종료·저장
           </button>
         </div>
         <div className="hint" style={{ marginTop: 12, textAlign: 'center' }}>
           종료하면 선택한 과목에 시간이 기록되고 나무가 자랍니다.
         </div>
+        {import.meta.env.DEV && kaguyaEnabled && (
+          <div className="fujiwara-dev-panel">
+            <div className="fujiwara-dev-title">🧪 후지와라 난입 테스트</div>
+            <div className="fujiwara-dev-controls">
+              <select
+                value={devInterruptType}
+                onChange={(event) => setDevInterruptType(event.target.value)}
+                disabled={fujiwaraInterruptBusy}
+              >
+                <option value="short_break">25분 · 간식</option>
+                <option value="one_hour">1시간 · 게임</option>
+                <option value="two_hours">2시간 · 놀람</option>
+                <option value="late_night">야간 · 야식</option>
+                <option value="streak">7일 연속 · 축하</option>
+              </select>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={devInterruptUseAi}
+                  onChange={(event) => setDevInterruptUseAi(event.target.checked)}
+                />
+                LLM 대사
+              </label>
+              <button
+                className="btn ghost sm"
+                onClick={() => previewFujiwaraInterrupt()}
+                disabled={fujiwaraInterruptBusy}
+              >
+                일반 난입
+              </button>
+              <button
+                className="btn ghost sm"
+                onClick={() => previewFujiwaraInterrupt({ reverse: true })}
+                disabled={fujiwaraInterruptBusy}
+              >
+                역난입 + 컷인
+              </button>
+            </div>
+            <div className="hint">개발 전용 · 기록과 일일 횟수에 반영되지 않음</div>
+          </div>
+        )}
       </div>
 
       <div className="card">

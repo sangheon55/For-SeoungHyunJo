@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
-import { useStore, uid } from '../store.jsx'
+import { useStore } from '../store.jsx'
+import { uid } from '../lib/id.js'
 import { dateStr, addDays } from '../lib/util.js'
 import { useToast } from '../components/ui.jsx'
 import { useConfirm } from '../components/confirm.jsx'

@@ -9,23 +9,24 @@ export default function Epilogue() {
       <div className="secret-card">
         <div className="secret-content">
           <div className="secret-leaf">🌳</div>
-          <h2 className="secret-h">에필로그</h2>
 
           <div className="secret-body">
             <p>
-              5급 기술고시 준비하는 친구 보고
-              <br />
-              혼자 공부하는 거 좀 덜 심심하라고 만든 앱이에요.
+              5급을 준비하는 조성현을 응원하기 위해 만든 프로그램입니다.
             </p>
 
             <p>
-              여기까지 들어왔으면 — 화이팅.
+              간단하게 만들려고 했는데, 재미 붙어서 뭐가 많이 생겼다.
+              <br />
+              덕분에 웹, 앱 공부 많이 된다.
             </p>
 
-            <p style={{ textAlign: 'center', marginTop: 28 }}>🌱</p>
+            <p>
+              성현아. 공부 열심히 해라.
+              <br />
+              파이팅.
+            </p>
           </div>
-
-          <div className="secret-sign">— 조성현 친구 이상헌이 만듦</div>
         </div>
       </div>
     </div>

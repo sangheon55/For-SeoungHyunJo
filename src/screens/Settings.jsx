@@ -1,12 +1,23 @@
 import React, { useEffect, useState } from 'react'
-import { useStore, uid } from '../store.jsx'
+import { useStore } from '../store.jsx'
+import { uid } from '../lib/id.js'
 import { CATEGORIES, PALETTE, useToast } from '../components/ui.jsx'
 import { useConfirm } from '../components/confirm.jsx'
+import { getKaguyaAiConfig, saveKaguyaAiConfig } from '../kaguya/kaguyaApi.js'
+import { useAuth } from '../auth/AuthContext.jsx'
+import { isProductionData } from '../storage/firebaseClient.js'
+import {
+  downloadLegacyFirebaseBackup,
+  inspectLegacyFirebaseData,
+  migrateLegacyFirebaseData,
+} from '../storage/legacyCloudMigration.js'
 
 export default function Settings() {
   const { data, update, exportData, importData, isElectron } = useStore()
   const { show, Toast } = useToast()
   const confirm = useConfirm()
+  const authState = useAuth()
+  const [migration, setMigration] = useState({ phase: 'idle', counts: null, message: '' })
 
   // 과목 추가 폼
   const [sName, setSName] = useState('')
@@ -17,6 +28,7 @@ export default function Settings() {
   const [eDate, setEDate] = useState('')
   // 데이터 파일 경로
   const [filePath, setFilePath] = useState('')
+  const [kaguyaAi, setKaguyaAi] = useState(() => getKaguyaAiConfig())
 
   useEffect(() => {
     if (isElectron && window.plannerStore.filePath) {
@@ -131,10 +143,95 @@ export default function Settings() {
     show(ok ? '데이터를 가져왔어요 📥' : '가져오기를 취소했어요')
   }
 
+  const inspectMigration = async () => {
+    setMigration({ phase: 'checking', counts: null, message: '' })
+    try {
+      const counts = await inspectLegacyFirebaseData()
+      setMigration({ phase: 'ready', counts, message: '' })
+    } catch (error) {
+      setMigration({ phase: 'error', counts: null, message: error.message })
+    }
+  }
+
+  const runMigration = async () => {
+    const proceed = await confirm(
+      '기존 Firebase 원본은 삭제하지 않고 현재 Google 계정 전용 경로로 복사합니다.\n먼저 JSON 백업을 내려받은 뒤 계속할까요?',
+      { title: '기존 데이터 안전하게 연결', confirmText: '백업 후 복사' },
+    )
+    if (!proceed) return
+    setMigration((value) => ({ ...value, phase: 'copying', message: '' }))
+    try {
+      await downloadLegacyFirebaseBackup()
+      const result = await migrateLegacyFirebaseData()
+      setMigration({
+        phase: 'done',
+        counts: result.counts,
+        message: `${result.copied}개 항목을 복사했습니다. 기존 원본은 그대로 유지됩니다.`,
+      })
+    } catch (error) {
+      setMigration((value) => ({ ...value, phase: 'error', message: error.message }))
+    }
+  }
+
   return (
     <div>
       <div className="page-title">설정</div>
-      <div className="page-sub">과목·시험일·목표 공부 시간을 관리하세요 ⚙️</div>
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-title">🔐 계정과 데이터 동기화</div>
+        {!authState.cloudEnabled ? (
+          <div className="hint">
+            개발 데이터 모드입니다. 이 화면의 변경은 조성현이 사용하는 운영 Firebase에 전송되지 않습니다.
+          </div>
+        ) : (
+          <>
+            <div className="item">
+              {authState.user?.photoURL && (
+                <img
+                  src={authState.user.photoURL}
+                  alt=""
+                  width="34"
+                  height="34"
+                  style={{ borderRadius: '50%' }}
+                />
+              )}
+              <span className="grow">
+                <b>{authState.user?.displayName || 'Google 사용자'}</b>
+                <span className="hint" style={{ display: 'block' }}>{authState.user?.email}</span>
+              </span>
+              <span className="tag">{authState.invitation?.role || 'user'}</span>
+              <button className="btn ghost sm" onClick={authState.logout}>로그아웃</button>
+            </div>
+
+            {isProductionData && authState.invitation?.canMigrateLegacy === true && (
+              <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
+                <b>기존 Firebase 전체 데이터를 초기값으로 복사</b>
+                <div className="hint" style={{ margin: '6px 0 10px' }}>
+                  기존 공용 데이터는 삭제하지 않고 이 계정의 전용 저장소로 전체 복사합니다.
+                  복사 이후에는 계정별 데이터가 서로 독립적으로 저장됩니다.
+                </div>
+                <div className="row">
+                  <button className="btn ghost" onClick={inspectMigration} disabled={migration.phase === 'checking'}>
+                    {migration.phase === 'checking' ? '확인 중…' : '기존 전체 데이터 확인'}
+                  </button>
+                  {migration.phase === 'ready' && (
+                    <button className="btn" onClick={runMigration}>백업 후 전체 데이터 복사</button>
+                  )}
+                </div>
+                {migration.counts && (
+                  <div className="hint section-gap">
+                    발견된 데이터: {Object.values(migration.counts).reduce((sum, count) => sum + count, 0)}개
+                  </div>
+                )}
+                {migration.message && (
+                  <div className="hint section-gap" style={{ color: migration.phase === 'error' ? '#a1262d' : '#2e7d32' }}>
+                    {migration.message}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </div>
 
       {/* 과목 */}
       <div className="card" style={{ marginBottom: 16 }}>
@@ -317,6 +414,82 @@ export default function Settings() {
         </div>
       </div>
 
+      {/* 캐릭터 레이어 */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-title">🎀 캐릭터 레이어</div>
+        <div className="hint" style={{ marginBottom: 10 }}>
+          타이머에는 카구야, 플래너에는 이이노, 통합 검색에는 하야사카 캐릭터와 상황별 대사를 표시합니다.
+          이 설정은 모든 애니메이션 캐릭터에 함께 적용되며, 꺼도 기존 기능과 학습 기록에는 영향이 없습니다.
+        </div>
+        <label className="item" style={{ cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            className="checkbox"
+            checked={data.settings.kaguyaEnabled !== false}
+            onChange={(e) =>
+              update((d) => ({ ...d, settings: { ...d.settings, kaguyaEnabled: e.target.checked } }))
+            }
+          />
+          <span className="grow">캐릭터 레이어 사용</span>
+          <span className="hint">{data.settings.kaguyaEnabled !== false ? 'ON' : 'OFF'}</span>
+        </label>
+        <label className="item" style={{ cursor: 'pointer', marginTop: 8 }}>
+          <input
+            type="checkbox"
+            className="checkbox"
+            checked={data.settings.fujiwaraInterruptEnabled !== false}
+            onChange={(e) =>
+              update((d) => ({
+                ...d,
+                settings: { ...d.settings, fujiwaraInterruptEnabled: e.target.checked },
+              }))
+            }
+          />
+          <span className="grow">후지와라 돌발 난입</span>
+          <span className="hint">{data.settings.fujiwaraInterruptEnabled !== false ? 'ON' : 'OFF'}</span>
+        </label>
+        <label className="item" style={{ cursor: 'pointer', marginTop: 8 }}>
+          <input
+            type="checkbox"
+            className="checkbox"
+            checked={!!data.settings.kaguyaThemeEnabled}
+            onChange={(e) =>
+              update((d) => ({
+                ...d,
+                settings: { ...d.settings, kaguyaThemeEnabled: e.target.checked },
+              }))
+            }
+          />
+          <span className="grow">카구야 UI 테마 사용</span>
+          <span className="hint">{data.settings.kaguyaThemeEnabled ? 'ON' : 'OFF'}</span>
+        </label>
+        <div className="hint" style={{ marginTop: 12, marginBottom: 8 }}>
+          GPT-4o 질문과 자동 대사를 사용하려면 서버에 설정한 AI 연결 암호를 입력하세요.
+          OpenAI API 키가 아니라 별도로 만든 앱 전용 암호입니다.
+        </div>
+        <div className="row" style={{ alignItems: 'flex-end', gap: 10 }}>
+          <label className="fld grow">
+            AI 연결 암호
+            <input
+              type="password"
+              value={kaguyaAi.accessCode}
+              onChange={(e) => setKaguyaAi((value) => ({ ...value, accessCode: e.target.value }))}
+              placeholder="서버에 설정한 KAGUYA_ACCESS_TOKEN"
+              autoComplete="off"
+            />
+          </label>
+          <button
+            className="btn ghost"
+            onClick={() => {
+              saveKaguyaAiConfig(kaguyaAi)
+              show('카구야 AI 연결 설정을 저장했어요.')
+            }}
+          >
+            AI 설정 저장
+          </button>
+        </div>
+      </div>
+
       {/* 모바일 화면 */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-title">📱 모바일 화면</div>
@@ -339,10 +512,10 @@ export default function Settings() {
 
       {/* 데이터 */}
       <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-title">💾 데이터</div>
+        <div className="card-title">💾 데이터 저장과 백업</div>
         <div className="hint" style={{ marginBottom: 10 }}>
-          모든 데이터는 아래 파일에 저장됩니다. 앱(.exe)을 새 버전으로 교체해도
-          이 파일은 그대로 유지되므로 데이터가 사라지지 않습니다.
+          일반 학습 데이터는 이 기기에 먼저 저장되고, 로그인 중에는 사용자별 Firebase와 동기화됩니다.
+          첨부 이미지는 아직 이 기기에만 저장되므로 사이트 데이터를 삭제하기 전에 JSON 백업을 받아주세요.
           {filePath && <><br /><b style={{ color: '#2e7d32' }}>📁 {filePath}</b></>}
         </div>
         <div className="row">
@@ -355,7 +528,7 @@ export default function Settings() {
           )}
         </div>
         <div className="hint section-gap">
-          다른 PC로 옮길 때: 내보내기 → 파일 전달 → 새 PC에서 가져오기
+          다른 기기로 직접 옮기거나 비상 복구본을 만들 때 JSON 내보내기를 사용하세요.
         </div>
       </div>
 

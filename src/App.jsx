@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useStore } from './store.jsx'
 import useIsMobile from './lib/useIsMobile.js'
 import DesktopShell from './shells/DesktopShell.jsx'
@@ -15,6 +15,11 @@ export default function App() {
 
   const forceDesktopPersisted = !!data.settings.forceDesktopLayout
   const useMobileShell = isNarrow && !forceDesktopPersisted && !sessionForceDesktop
+
+  useEffect(() => {
+    document.body.classList.toggle('theme-kaguya', !!data.settings.kaguyaThemeEnabled)
+    return () => document.body.classList.remove('theme-kaguya')
+  }, [data.settings.kaguyaThemeEnabled])
 
   // 게이트 카드의 "항상 데스크탑으로 보기" — 설정에 영구 저장 + 이번 세션도 즉시 반영
   const alwaysDesktop = () => {

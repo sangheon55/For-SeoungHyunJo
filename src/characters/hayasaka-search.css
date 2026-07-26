@@ -1,0 +1,179 @@
+.hayasaka-search-layer {
+  position: relative;
+  min-height: 280px;
+  margin-bottom: 16px;
+  overflow: hidden;
+  isolation: isolate;
+  border: 1px solid rgba(43, 84, 128, 0.46);
+  border-radius: 20px;
+  background: #111923;
+  box-shadow: 0 18px 42px rgba(16, 31, 48, 0.2);
+}
+
+.hayasaka-search-layer::before {
+  content: '';
+  position: absolute;
+  z-index: 3;
+  inset: 8px;
+  border: 1px solid rgba(221, 235, 248, 0.2);
+  border-radius: 14px;
+  pointer-events: none;
+}
+
+.hayasaka-search-layer::after {
+  content: 'INFORMATION DESK';
+  position: absolute;
+  z-index: 3;
+  top: 21px;
+  right: 25px;
+  color: rgba(223, 238, 250, 0.5);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  pointer-events: none;
+}
+
+.hayasaka-search-bg,
+.hayasaka-search-shade {
+  position: absolute;
+  inset: 0;
+}
+
+.hayasaka-search-bg {
+  z-index: 0;
+  background: var(--hayasaka-bg-url) center 48% / cover no-repeat;
+  filter: brightness(0.6) saturate(0.7) contrast(1.04);
+  transform: scale(1.02);
+}
+
+.hayasaka-search-shade {
+  z-index: 1;
+  background:
+    linear-gradient(90deg, rgba(10, 20, 31, 0.12), rgba(10, 20, 31, 0.32) 48%, rgba(10, 20, 31, 0.9)),
+    linear-gradient(0deg, rgba(10, 20, 31, 0.78), transparent 62%);
+}
+
+.hayasaka-search-character {
+  position: absolute;
+  z-index: 2;
+  top: 5px;
+  bottom: -92%;
+  left: 2%;
+  width: min(54%, 500px);
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  animation: hayasaka-search-breathe 4.6s ease-in-out infinite;
+}
+
+.hayasaka-search-character img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center top;
+  filter: drop-shadow(0 14px 20px rgba(7, 14, 23, 0.36));
+}
+
+.hayasaka-search-fallback {
+  display: grid;
+  width: 220px;
+  height: 220px;
+  place-items: center;
+  align-self: flex-start;
+  margin-top: 18px;
+  border: 1px solid rgba(219, 235, 250, 0.28);
+  border-radius: 50%;
+  background: rgba(25, 48, 72, 0.78);
+  color: rgba(230, 242, 252, 0.75);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+}
+
+.hayasaka-search-dialogue {
+  position: absolute;
+  z-index: 4;
+  right: 28px;
+  bottom: 25px;
+  width: min(54%, 610px);
+  padding: 17px 19px;
+  border: 1px solid rgba(61, 103, 145, 0.28);
+  border-radius: 5px 16px 16px 16px;
+  background: rgba(248, 252, 255, 0.96);
+  box-shadow: 0 14px 32px rgba(8, 20, 32, 0.26);
+  color: #253443;
+}
+
+.hayasaka-search-name {
+  margin-bottom: 6px;
+  color: #285d8a;
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+}
+
+.hayasaka-search-dialogue p {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.6;
+}
+
+.hayasaka-search-dialogue .hayasaka-search-inner {
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px solid rgba(51, 96, 136, 0.13);
+  color: #697680;
+  font-size: 12px;
+  font-style: italic;
+  font-weight: 500;
+}
+
+@keyframes hayasaka-search-breathe {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+@media (max-width: 760px) {
+  .hayasaka-search-layer {
+    min-height: 250px;
+    border-radius: 17px;
+  }
+
+  .hayasaka-search-layer::after {
+    top: 17px;
+    right: 18px;
+    font-size: 8px;
+  }
+
+  .hayasaka-search-shade {
+    background: linear-gradient(0deg, rgba(10, 20, 31, 0.92), rgba(10, 20, 31, 0.06) 78%);
+  }
+
+  .hayasaka-search-character {
+    top: 8px;
+    bottom: -68%;
+    left: 50%;
+    width: min(100%, 440px);
+    transform: translateX(-50%);
+  }
+
+  .hayasaka-search-dialogue {
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    width: auto;
+    padding: 13px 15px;
+  }
+
+  .hayasaka-search-dialogue p { font-size: 13px; }
+
+  @keyframes hayasaka-search-breathe {
+    0%, 100% { transform: translateX(-50%) translateY(0); }
+    50% { transform: translateX(-50%) translateY(-3px); }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hayasaka-search-character { animation: none; }
+}

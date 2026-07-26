@@ -3,48 +3,60 @@ import { mergeDefaults } from './storage/defaultData.js'
 import { loadFlatData, persistDiff, persistFullReplace } from './storage/legacyMapping.js'
 import { migrateLegacyLocalStorageIfNeeded } from './storage/migrateLegacyLocalStorage.js'
 import { startRealtimeSync, stopRealtimeSync, pushAllToFirestore } from './storage/firestoreSync.js'
-
-export const uid = () => crypto.randomUUID()
+import { configureLocalDatabase } from './storage/localAdapter.js'
+import { useAuth } from './auth/AuthContext.jsx'
 
 // ── Context ─────────────────────────────────────────────────
 const Ctx = createContext(null)
 
 export function StoreProvider({ children }) {
+  const { user, cloudEnabled } = useAuth()
   const [data, setData] = useState(null)
+  const dataRef = useRef(null)
   const ready = useRef(false)
 
   useEffect(() => {
     let alive = true
     ;(async () => {
+      dataRef.current = null
+      ready.current = false
+      setData(null)
+      configureLocalDatabase(cloudEnabled ? user?.uid : null)
       const imported = await migrateLegacyLocalStorageIfNeeded()
       const loaded = await loadFlatData()
       if (alive) {
-        setData(mergeDefaults(loaded))
+        const merged = mergeDefaults(loaded)
+        dataRef.current = merged
+        setData(merged)
         ready.current = true
       }
       // 레거시 localStorage에서 실제로 뭔가 가져왔을 때만 업로드 — 매 기동마다가 아니라
       if (imported) pushAllToFirestore().catch((e) => console.warn('[sync] push after migrate failed', e))
     })()
     return () => { alive = false }
-  }, [])
+  }, [cloudEnabled, user?.uid])
 
   // W5-lite: Firestore 실시간 동기화. 위 로컬 로드 effect와 독립적으로 즉시 리스너를 건다.
   // 원격 변경이 로컬 Dexie에 반영될 때마다 다시 읽어서 setData — Dexie 읽기는 로컬이라 싸다.
   useEffect(() => {
     const reconcileFromLocal = async () => {
       const loaded = await loadFlatData()
-      setData(mergeDefaults(loaded))
+      const merged = mergeDefaults(loaded)
+      dataRef.current = merged
+      setData(merged)
     }
     startRealtimeSync(reconcileFromLocal)
     return () => stopRealtimeSync()
-  }, [])
+  }, [cloudEnabled, user?.uid])
 
   const update = (patch) => {
-    setData((prev) => {
-      const next = typeof patch === 'function' ? patch(prev) : { ...prev, ...patch }
-      persistDiff(prev, next).catch((e) => console.warn('[store] persist failed', e))
-      return next
-    })
+    const prev = dataRef.current
+    if (!prev) return null
+    const next = typeof patch === 'function' ? patch(prev) : { ...prev, ...patch }
+    dataRef.current = next
+    setData(next)
+    persistDiff(prev, next).catch((e) => console.warn('[store] persist failed', e))
+    return next
   }
 
   const exportData = async () => {
@@ -69,6 +81,7 @@ export function StoreProvider({ children }) {
           try {
             const merged = mergeDefaults(JSON.parse(reader.result))
             await persistFullReplace(merged)
+            dataRef.current = merged
             setData(merged)
             pushAllToFirestore().catch((e) => console.warn('[sync] push after import failed', e))
             resolve(true)

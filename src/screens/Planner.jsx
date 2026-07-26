@@ -1,8 +1,11 @@
 import React, { useState } from 'react'
-import { useStore, uid } from '../store.jsx'
+import { useStore } from '../store.jsx'
+import { uid } from '../lib/id.js'
 import { dateStr, addDays, prettyDate, hm, hmToMin } from '../lib/util.js'
 import { getSubject, SubjectTag } from '../components/ui.jsx'
 import { useConfirm } from '../components/confirm.jsx'
+import IinoLayer from '../characters/IinoLayer.jsx'
+import { getIinoPresentation } from '../characters/iinoState.js'
 
 export default function Planner({ lite = false }) {
   const { data, update } = useStore()
@@ -46,6 +49,12 @@ export default function Planner({ lite = false }) {
     update((d) => ({ ...d, tasks: d.tasks.filter((t) => t.id !== id) }))
 
   const done = dayTasks.filter((t) => t.done).length
+  const characterLayersEnabled = data.settings.kaguyaEnabled !== false
+  const iinoPresentation = getIinoPresentation({
+    total: dayTasks.length,
+    done,
+    isToday: date === dateStr(),
+  })
 
   // ── 학습 기록(타임라인) 직접 추가·수정 ──────────────────────
   const [mSubject, setMSubject] = useState(data.subjects[0]?.id || '')
@@ -117,7 +126,6 @@ export default function Planner({ lite = false }) {
   return (
     <div>
       <div className="page-title">플래너</div>
-      <div className="page-sub">하루하루 할 일을 계획하고, 공부 동선을 기록하세요 📅</div>
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="flex-between">
@@ -132,6 +140,14 @@ export default function Planner({ lite = false }) {
           </div>
         </div>
       </div>
+
+      {characterLayersEnabled && (
+        <IinoLayer
+          face={iinoPresentation.face}
+          text={iinoPresentation.text}
+          inner={iinoPresentation.inner}
+        />
+      )}
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-title">할 일 추가</div>

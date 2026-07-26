@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react'
-import { useStore, uid } from '../store.jsx'
+import { useStore } from '../store.jsx'
+import { uid } from '../lib/id.js'
 import { dateStr, dDay } from '../lib/util.js'
 import { useToast } from '../components/ui.jsx'
 import { dueToday, makeWrongAnswer, nextDueDate } from '../lib/ebbinghaus.js'
@@ -116,8 +117,9 @@ export default function WrongNotes() {
   return (
     <div>
       <div className="page-title">오답노트</div>
-      <div className="page-sub">에빙하우스 망각곡선에 맞춰 1·3·7·14·30일 복습을 자동으로 챙겨드려요 ❌</div>
-
+      <div className="page-sub">
+        틀린 문제를 등록하면 1·3·7·14·30일 간격으로 복습을 예약하고, 맞힌 결과에 따라 다음 복습 단계로 넘어갑니다.
+      </div>
       <div className="split">
         {/* 좌측: 과목 분할 */}
         <div className="card subj-list">
@@ -262,7 +264,7 @@ function WrongCard({ w, today, subject, onQuiz, onEdit, onDelete }) {
       {w.images?.length > 0 && (
         <div className="wa-img-row">
           {w.images.map((img, i) => (
-            <div className="wa-img-thumb mini" key={i}>
+            <div className="wa-img-thumb display" key={i}>
               <img src={img.src} alt={img.name || ''} />
             </div>
           ))}

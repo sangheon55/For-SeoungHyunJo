@@ -1,6 +1,10 @@
 {
-  "rewrites": [
-    { "source": "/planner/:path*", "destination": "/:path*" },
-    { "source": "/(.*)", "destination": "/index.html" }
+  "installCommand": "npm install",
+  "buildCommand": "npm run build",
+  "devCommand": "npm run dev -- --host 127.0.0.1",
+  "outputDirectory": "dist",
+  "routes": [
+    { "handle": "filesystem" },
+    { "src": "/.*", "dest": "/index.html" }
   ]
 }

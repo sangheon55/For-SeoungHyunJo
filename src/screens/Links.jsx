@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react'
-import { useStore, uid } from '../store.jsx'
+import { useStore } from '../store.jsx'
+import { uid } from '../lib/id.js'
 import { dateStr } from '../lib/util.js'
 import { useToast } from '../components/ui.jsx'
 import { useConfirm } from '../components/confirm.jsx'
@@ -167,7 +168,6 @@ export default function Links() {
   return (
     <div>
       <div className="page-title">자주 가는 곳</div>
-      <div className="page-sub">공부에 자주 들르는 사이트를 모아두고 한 번에 열어요 🔗</div>
 
       <div className="split">
         {/* 좌측: 카테고리 분할 */}

@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useStore } from '../store.jsx'
 import { dateStr, addDays, weekStart, monthKey, hm, inRange, streak } from '../lib/util.js'
 import { computeWeaknessBySubject } from '../lib/ebbinghaus.js'
+import IshigamiAdvisor from '../characters/IshigamiAdvisor.jsx'
 
 function sumWhere(sessions, fn) {
   return sessions.reduce((a, s) => (fn(s) ? a + s.seconds : a), 0)
@@ -95,7 +96,7 @@ export default function Stats() {
   return (
     <div>
       <div className="page-title">통계</div>
-      <div className="page-sub">공부량의 흐름을 한눈에 확인하세요 📊</div>
+      {data.settings.kaguyaEnabled !== false && <IshigamiAdvisor data={data} />}
 
       <div className="card-title">📈 공부량 비교</div>
       <div className="grid g3" style={{ marginBottom: 18 }}>

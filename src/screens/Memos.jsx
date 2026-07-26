@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
-import { useStore, uid } from '../store.jsx'
+import { useStore } from '../store.jsx'
+import { uid } from '../lib/id.js'
 import { dateStr } from '../lib/util.js'
 
 export default function Memos() {
@@ -42,7 +43,6 @@ export default function Memos() {
   return (
     <div>
       <div className="page-title">과목 메모</div>
-      <div className="page-sub">과목마다 개념·암기 포인트·공부 팁을 정리하세요 📝</div>
 
       <div className="split">
         <div className="card subj-list">

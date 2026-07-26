@@ -51,6 +51,11 @@ export const defaultData = {
       { id: 'cl3', text: '📚 책·자료 준비됐어요' },
     ],
     forceDesktopLayout: false, // 모바일 폭에서도 항상 데스크탑 레이아웃을 강제할지
+    kaguyaEnabled: true, // 타이머 화면의 카구야 레이어 표시 여부
+    fujiwaraInterruptEnabled: true, // 타이머 종료 후 후지와라 돌발 난입
+    kaguyaThemeEnabled: false, // 앱 전체 카구야 학생회실 UI 테마
+    kaguyaVerdicts: {},
+    lastKaguyaVerdictShownDate: '',
   },
   wrongSettings: {
     intervals: [1, 3, 7, 14, 30], // 에빙하우스 5단계(일)

@@ -1,12 +1,15 @@
 {
   "name": "seonghyeon-planner",
   "productName": "Seonghyeon Planner",
-  "version": "1.6.1",
+  "version": "2.2.0",
   "private": true,
+  "type": "module",
   "description": "조성현을 위한 5급 기술고시 합격 플래너",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test": "node --test",
+    "check": "npm run test && npm run build",
     "preview": "vite preview",
     "generate-icons": "node scripts/generate-pwa-icons.cjs"
   },
@@ -18,6 +21,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
+    "firebase-tools": "^15.24.0",
     "vite": "^6.0.7",
     "vite-plugin-pwa": "^0.21.1"
   }

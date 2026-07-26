@@ -4,6 +4,7 @@ import {
   collection, doc, setDoc, getDoc, onSnapshot, writeBatch,
 } from 'firebase/firestore'
 import { db as firestore } from './firebaseClient.js'
+import { auth, cloudEnabled } from './firebaseClient.js'
 import { localAdapter } from './localAdapter.js'
 import { ENTITIES } from './types.js'
 
@@ -12,9 +13,13 @@ import { ENTITIES } from './types.js'
 export const SYNCED_ENTITIES = ENTITIES.filter((e) => e !== 'photos')
 
 const PREFIX = 'planner_'
-const collectionName = (entity) => `${PREFIX}${entity}`
-const colRef = (entity) => collection(firestore, collectionName(entity))
-const docRef = (entity, id) => doc(firestore, collectionName(entity), id)
+const userId = () => auth.currentUser?.uid || null
+const colRef = (entity) => {
+  const uid = userId()
+  if (!uid) throw new Error('Authentication required for cloud sync')
+  return collection(firestore, 'users', uid, `${PREFIX}${entity}`)
+}
+const docRef = (entity, id) => doc(colRef(entity), id)
 
 // Firestore 1MiB/문서 한도 아래 여유값. wrongs.images(첨부 이미지)가 실제로 이 한도에
 // 걸릴 수 있는 유일한 비-photos 엔티티다 (WrongForm.jsx 확인).
@@ -30,7 +35,7 @@ function clean(row) {
 // 로컬 쓰기 → Firestore 미러. fire-and-forget: 로컬 쓰기는 이미 끝났고 그게 진실의 소스다.
 // 실패해도 호출자에 던지지 않는다(오프라인 등은 SDK의 영속 캐시가 알아서 재시도 큐잉한다).
 export function mirrorPut(entity, row) {
-  if (!SYNCED_ENTITIES.includes(entity)) return
+  if (!cloudEnabled || !userId() || !SYNCED_ENTITIES.includes(entity)) return
   const size = approxSize(row)
   if (size > MAX_DOC_BYTES) {
     console.warn(`[sync] skip push, oversized ${entity}/${row.id} (${size}B)`)
@@ -46,6 +51,7 @@ export function mirrorPut(entity, row) {
 // 무작정 덮어쓰지 않고 행마다 원격을 먼저 읽어 LWW 비교한다: "오래된 백업 재가져오기가
 // 이미 동기화된 더 최신 원격 데이터를 덮어쓰는" 사고를 막기 위함.
 export async function pushAllToFirestore() {
+  if (!cloudEnabled || !userId()) return
   for (const entity of SYNCED_ENTITIES) {
     const rows = await localAdapter.list(entity, { includeDeleted: true })
     const winners = (await Promise.all(rows.map(async (row) => {
@@ -89,6 +95,7 @@ let unsubs = []
 // 쏟아내는 것 때문에 store.jsx가 loadFlatData()를 연속으로 여러 번 돌리지 않도록.
 export function startRealtimeSync(onChanged) {
   stopRealtimeSync()
+  if (!cloudEnabled || !userId()) return
   let pending = false
   let timer = null
   const schedule = () => {

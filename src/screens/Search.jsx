@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { useStore } from '../store.jsx'
+import HayasakaSearchLayer from '../characters/HayasakaSearchLayer.jsx'
+import { getHayasakaSearchPresentation } from '../characters/hayasakaSearchState.js'
 
 // 통합 검색 — 메모·오답·링크·플래시카드·하루메모·취미·사진 캡션 가로질러 찾기.
 // 검색어는 대소문자 무시·부분 일치.
@@ -41,11 +43,15 @@ export default function Search({ go }) {
     return { memos, wrongs, links, flashcards, dayNotesEntries, hobbies, photos, total }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, data])
+  const hayasakaPresentation = getHayasakaSearchPresentation({
+    query,
+    total: results?.total || 0,
+  })
+  const characterLayersEnabled = data.settings.kaguyaEnabled !== false
 
   return (
     <div>
       <div className="page-title">🔍 통합 검색</div>
-      <div className="page-sub">메모·오답·링크·플래시카드·하루 메모·취미·사진을 한 번에 찾아요</div>
 
       <div className="card" style={{ marginBottom: 16 }}>
         <input
@@ -64,6 +70,14 @@ export default function Search({ go }) {
           </div>
         )}
       </div>
+
+      {characterLayersEnabled && (
+        <HayasakaSearchLayer
+          face={hayasakaPresentation.face}
+          text={hayasakaPresentation.text}
+          inner={hayasakaPresentation.inner}
+        />
+      )}
 
       {!results && (
         <div className="card empty" style={{ padding: 36, lineHeight: 1.8 }}>

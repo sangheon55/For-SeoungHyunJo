@@ -1,6 +1,15 @@
 node_modules/
 dist/
 release/
+.env
+.env.*
+functions/.env
+functions/.secret.local
 
 # 조성현 친구 전용 콘텐츠 — git 추적 안 함 (편지 텍스트 + 사진은 로컬에만)
 src/screens/secret-data/
+.vercel
+.env*
+tmp/
+scripts/__pycache__/
+*.log

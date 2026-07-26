@@ -1,8 +1,10 @@
 import React, { useMemo, useState } from 'react'
-import { useStore, uid } from '../store.jsx'
+import { useStore } from '../store.jsx'
+import { uid } from '../lib/id.js'
 import { dateStr } from '../lib/util.js'
 import { useToast } from '../components/ui.jsx'
 import { useConfirm } from '../components/confirm.jsx'
+import { filesToImages } from '../lib/image.js'
 
 // 플래시카드 — 단순 암기용 카드 (앞면/뒷면).
 // 학습 모드: 미숙달 카드만 큐로 뽑아서 한 장씩 보여줌. 3연속 맞춤 시 mastered.
@@ -27,6 +29,8 @@ export default function Flashcards() {
   const [fFront, setFFront] = useState('')
   const [fBack, setFBack] = useState('')
   const [fSubject, setFSubject] = useState(data.subjects[0]?.id || '')
+  const [fImages, setFImages] = useState([])
+  const [imageBusy, setImageBusy] = useState(false)
 
   const cards = data.flashcards || []
 
@@ -53,7 +57,7 @@ export default function Flashcards() {
     return arr
   }, [cards, selectedSubject])
 
-  const resetForm = () => { setFFront(''); setFBack(''); setEditId(null) }
+  const resetForm = () => { setFFront(''); setFBack(''); setFImages([]); setEditId(null) }
   const openCreate = () => {
     resetForm()
     if (selectedSubject !== 'all' && data.subjects.some((s) => s.id === selectedSubject)) {
@@ -67,6 +71,7 @@ export default function Flashcards() {
     setEditId(c.id)
     setFFront(c.front || '')
     setFBack(c.back || '')
+    setFImages(c.images || [])
     setFSubject(c.subjectId || data.subjects[0]?.id || '')
     setFormOpen(true)
   }
@@ -80,7 +85,7 @@ export default function Flashcards() {
       update((d) => ({
         ...d,
         flashcards: (d.flashcards || []).map((c) =>
-          c.id === editId ? { ...c, front, back, subjectId: fSubject } : c,
+          c.id === editId ? { ...c, front, back, images: fImages, subjectId: fSubject } : c,
         ),
       }))
       show('카드를 수정했어요 ✍️')
@@ -94,6 +99,7 @@ export default function Flashcards() {
             subjectId: fSubject,
             front,
             back,
+            images: fImages,
             correctStreak: 0,
             totalAttempts: 0,
             lastReviewedAt: null,
@@ -178,6 +184,17 @@ export default function Flashcards() {
   const subjectName = (id) => data.subjects.find((s) => s.id === id)?.name || '미지정'
   const subjectColor = (id) => data.subjects.find((s) => s.id === id)?.color || '#9aa'
 
+  const addCardImages = async (files) => {
+    if (!files?.length) return
+    setImageBusy(true)
+    try {
+      const added = await filesToImages(Array.from(files))
+      setFImages((images) => [...images, ...added])
+    } finally {
+      setImageBusy(false)
+    }
+  }
+
   // 학습 모드 화면
   if (studyMode) {
     const currentCard = studyQueue[studyIdx]
@@ -220,6 +237,13 @@ export default function Flashcards() {
           <div className="flashcard-text">
             {revealed ? currentCard.back : currentCard.front}
           </div>
+          {currentCard.images?.length > 0 && (
+            <div className="flashcard-image-grid">
+              {currentCard.images.map((image, index) => (
+                <img key={index} src={image.src} alt={image.name || '플래시카드 이미지'} />
+              ))}
+            </div>
+          )}
         </div>
 
         {revealed ? (
@@ -242,8 +266,6 @@ export default function Flashcards() {
   return (
     <div>
       <div className="page-title">🃏 플래시카드</div>
-      <div className="page-sub">한국사 연도·전공 용어 같은 단순 암기에 좋아요. 3연속 맞추면 마스터 🎯</div>
-
       <div className="split">
         {/* 좌측: 과목 필터 */}
         <div className="card subj-list">
@@ -316,8 +338,38 @@ export default function Flashcards() {
                 <textarea rows={2} value={fBack} onChange={(e) => setFBack(e.target.value)}
                   placeholder="예: 1592년" />
               </label>
+              <label className="fld" style={{ marginBottom: 10 }}>
+                이미지 첨부
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(event) => {
+                    addCardImages(event.target.files)
+                    event.target.value = ''
+                  }}
+                />
+              </label>
+              {fImages.length > 0 && (
+                <div className="flashcard-image-grid editor">
+                  {fImages.map((image, index) => (
+                    <div className="flashcard-edit-image" key={index}>
+                      <img src={image.src} alt={image.name || '첨부 이미지'} />
+                      <button
+                        type="button"
+                        className="wa-img-del"
+                        onClick={() => setFImages((images) => images.filter((_, i) => i !== index))}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="row">
-                <button className="btn" onClick={saveCard}>{editId ? '수정 저장' : '+ 저장'}</button>
+                <button className="btn" onClick={saveCard} disabled={imageBusy}>
+                  {imageBusy ? '이미지 처리 중…' : editId ? '수정 저장' : '+ 저장'}
+                </button>
                 <button className="btn ghost" onClick={closeForm}>취소</button>
               </div>
             </div>
@@ -359,6 +411,13 @@ export default function Flashcards() {
                 {c.totalAttempts > 0 && <> · 총 시도 {c.totalAttempts}회</>}
                 {c.lastReviewedAt && <> · 마지막 학습 {c.lastReviewedAt}</>}
               </div>
+              {c.images?.length > 0 && (
+                <div className="flashcard-image-grid list">
+                  {c.images.map((image, index) => (
+                    <img key={index} src={image.src} alt={image.name || '플래시카드 이미지'} />
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>

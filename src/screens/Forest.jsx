@@ -12,7 +12,6 @@ export default function Forest() {
   return (
     <div>
       <div className="page-title">나의 숲</div>
-      <div className="page-sub">공부할수록 나무가 자라고, 큰나무가 모여 숲이 됩니다 🌲</div>
 
       <div className="grid g2" style={{ marginBottom: 16 }}>
         <div className="card tree-box">

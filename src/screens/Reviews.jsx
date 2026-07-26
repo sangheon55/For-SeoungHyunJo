@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
-import { useStore, uid } from '../store.jsx'
+import { useStore } from '../store.jsx'
+import { uid } from '../lib/id.js'
 import { getSubject, SubjectTag, useToast } from '../components/ui.jsx'
 
 export default function Reviews({ lite = false }) {
@@ -44,7 +45,6 @@ export default function Reviews({ lite = false }) {
   return (
     <div>
       <div className="page-title">회독 관리</div>
-      <div className="page-sub">기본서·기출집을 몇 회독했는지 추적하세요 📚</div>
 
       {!lite && (
         <div className="card" style={{ marginBottom: 16 }}>

@@ -6,17 +6,34 @@ import { getSubject, SubjectTag } from '../components/ui.jsx'
 import { dueToday } from '../lib/ebbinghaus.js'
 import { pushProgress, pullCheers } from '../lib/friendBridge.js'
 import { MEMBER_NAMES } from '../lib/friendMembers.js'
+import {
+  calculateInitiative,
+  createDailyVerdict,
+  dashboardFace,
+  dashboardGreeting,
+  initiativeLabel,
+} from '../kaguya/dashboardState.js'
+
+const kaguyaAsset = (face) => `${import.meta.env.BASE_URL}assets/characters/kaguya/upper_${face}.png`
 
 export default function Dashboard({ go }) {
   const { data, update } = useStore()
   const today = dateStr()
   const [cheers, setCheers] = useState([])
+  const kaguyaEnabled = data.settings.kaguyaEnabled !== false
+  const [showFreshVerdict] = useState(() => data.settings.lastKaguyaVerdictShownDate !== today)
 
   // 앱을 열 때마다 오늘 진행상황을 동상이몽으로 밀어보내고, 받은 응원 메시지를 가져온다.
   // 실패해도 화면엔 아무 표시 없이 조용히 넘어간다(오프라인/권한 문제 등).
   useEffect(() => {
+    let alive = true
     pushProgress(data)
-    pullCheers().then(setCheers)
+    pullCheers().then((nextCheers) => {
+      if (alive) setCheers(nextCheers)
+    })
+    return () => {
+      alive = false
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -35,6 +52,40 @@ export default function Dashboard({ go }) {
 
   const goalSec = (data.settings.dailyGoalMin || 510) * 60
   const goalPct = Math.min(100, Math.round((todaySec / goalSec) * 100))
+  const yesterday = addDays(today, -1)
+  const savedVerdict = data.settings.kaguyaVerdicts?.[yesterday]
+  const yesterdayVerdict = savedVerdict || createDailyVerdict(sessions, yesterday, goalSec)
+  const initiative = calculateInitiative(sessions, today, goalSec)
+  const greeting = dashboardGreeting(new Date().getHours(), yesterdayVerdict)
+  const facePath = kaguyaAsset(dashboardFace(greeting.face, initiative.value))
+  const initiativeName = initiativeLabel(initiative.value)
+  const heroTitle = showFreshVerdict ? greeting.title : '오늘의 두뇌전'
+  const heroText = showFreshVerdict
+    ? greeting.text
+    : `현재 주도권은 ${initiativeName}. 오늘 기록으로 흐름을 바꿔보세요, 성현 씨.`
+  const heroInner = showFreshVerdict
+    ? greeting.inner
+    : '(어제 판정은 끝났어요. 오늘은 어떤 결과를 보여주실 건가요?)'
+
+  useEffect(() => {
+    if (!kaguyaEnabled) return
+    update((current) => {
+      const hasVerdict = !!current.settings.kaguyaVerdicts?.[yesterday]
+      const markedShown = current.settings.lastKaguyaVerdictShownDate === today
+      if (hasVerdict && markedShown) return current
+      return {
+        ...current,
+        settings: {
+          ...current.settings,
+          kaguyaVerdicts: {
+            ...(current.settings.kaguyaVerdicts || {}),
+            ...(!hasVerdict ? { [yesterday]: yesterdayVerdict } : {}),
+          },
+          lastKaguyaVerdictShownDate: today,
+        },
+      }
+    })
+  }, [kaguyaEnabled, today, update, yesterday, yesterdayVerdict])
 
   const ddays = [...data.examDates]
     .map((e) => ({ ...e, d: dDay(e.date) }))
@@ -46,14 +97,47 @@ export default function Dashboard({ go }) {
     update((d) => ({ ...d, tasks: d.tasks.map((t) => (t.id === id ? { ...t, done: !t.done } : t)) }))
 
   return (
-    <div>
+    <div className={`dashboard-page${kaguyaEnabled ? ' is-kaguya' : ''}`}>
       <div className="page-title">{prettyDate(today)}</div>
-      <div className="page-sub">성현아, 오늘도 합격을 향해 한 걸음 🌿</div>
-
-      <div className="cheer" style={{ marginBottom: 16 }}>
-        <div className="lbl">💌 오늘의 응원</div>
-        <div className="msg">{cheer}</div>
+      <div className="page-sub">
+        {kaguyaEnabled ? '학생회실 두뇌전 · 오늘의 학습 현황' : '성현아, 오늘도 합격을 향해 한 걸음 🌿'}
       </div>
+
+      {kaguyaEnabled ? (
+        <section className={`kaguya-dashboard-hero verdict-${yesterdayVerdict.result}${showFreshVerdict ? ' is-fresh-verdict' : ' is-returning'}`}>
+          <div className="kaguya-dashboard-copy">
+            <div className="kaguya-dashboard-eyebrow">
+              秀知院 学生会 · {showFreshVerdict ? 'DAILY VERDICT' : 'TODAY STATUS'}
+            </div>
+            <div className="kaguya-dashboard-verdict">{heroTitle}</div>
+            <p className="kaguya-dashboard-line">{heroText}</p>
+            <p className="kaguya-dashboard-inner">{heroInner}</p>
+
+            <div className="initiative-card">
+              <div className="initiative-head">
+                <span>최근 7일 주도권</span>
+                <b>{initiativeName} · {initiative.value}</b>
+              </div>
+              <div className="initiative-track" aria-label={`주도권 ${initiative.value}점`}>
+                <span className="initiative-mid" />
+                <span className="initiative-fill" style={{ width: `${initiative.value}%` }} />
+                <span className="initiative-marker" style={{ left: `${initiative.value}%` }} />
+              </div>
+              <div className="initiative-labels">
+                <span>카구야 우세</span>
+                <span>호각</span>
+                <span>성현 우세</span>
+              </div>
+            </div>
+          </div>
+          <img className="kaguya-dashboard-character" src={facePath} alt="" draggable="false" />
+        </section>
+      ) : (
+        <div className="cheer" style={{ marginBottom: 16 }}>
+          <div className="lbl">💌 오늘의 응원</div>
+          <div className="msg">{cheer}</div>
+        </div>
+      )}
 
       {cheers.length > 0 && (
         <div className="card" style={{ marginBottom: 16 }}>

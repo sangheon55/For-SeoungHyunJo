@@ -11,8 +11,10 @@ import Rest from './screens/Rest.jsx'
 import Flashcards from './screens/Flashcards.jsx'
 import Search from './screens/Search.jsx'
 import Settings from './screens/Settings.jsx'
+import VersionHistory from './screens/VersionHistory.jsx'
 import Secret, { HAS_SECRET } from './screens/Secret.jsx'
 import Epilogue from './screens/Epilogue.jsx'
+import { APP_VERSION } from './appVersion.js'
 
 export const NAV = [
   { id: 'home', label: '홈', ico: '🏡', C: Dashboard },
@@ -28,6 +30,7 @@ export const NAV = [
   { id: 'stats', label: '통계', ico: '📊', C: Stats },
   { id: 'forest', label: '나의 숲', ico: '🌲', C: Forest },
   { id: 'settings', label: '설정', ico: '⚙️', C: Settings },
+  { id: 'version', label: `v${APP_VERSION}`, ico: 'ℹ️', C: VersionHistory },
 ]
 
 export const HIDDEN_NAV = [

@@ -1,14 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useConfirm } from '../components/confirm.jsx'
 import { activeSessionStore } from '../storage/activeSessionStore.js'
+import { computeElapsedSec } from './sessionTime.js'
 
 const AWAY_THRESHOLD_MS = 20 * 60 * 1000
 
-// 경과 시간은 항상 이 함수로 다시 계산한다 — 절대 누적 변수를 쓰지 않는다
-export function computeElapsedSec({ startedAt, pausedMs = 0, lastPausedAt = null }, now = Date.now()) {
-  const pausedNow = lastPausedAt ? now - lastPausedAt : 0
-  return Math.max(0, (now - startedAt - pausedMs - pausedNow) / 1000)
-}
+export { computeElapsedSec } from './sessionTime.js'
 
 async function acquireWakeLock(ref) {
   if (!('wakeLock' in navigator)) return

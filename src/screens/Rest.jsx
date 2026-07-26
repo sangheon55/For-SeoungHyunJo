@@ -8,7 +8,6 @@ export default function Rest() {
   return (
     <div>
       <div className="page-title">쉼 ☕</div>
-      <div className="page-sub">힘이 들 땐 잠깐 여기 와서 한숨 돌리세요</div>
 
       <div className="tab-bar">
         <button
