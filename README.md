@@ -3,7 +3,7 @@
 5급 공채 과학기술직 산림자원을 준비하는 조성현을 위한 개인용 React/Vite 웹·PWA 플래너다.
 
 - 운영 주소: https://seonghyeon-planner.vercel.app
-- 현재 버전: `v2.2.0`
+- 현재 버전: `v2.2.1`
 - 운영 계정: 허용된 Google 계정만 접속 가능
 - 저장 방식: IndexedDB 로컬 우선 + 사용자 UID별 Firestore 실시간 동기화
 

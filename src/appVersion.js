@@ -1,6 +1,14 @@
-export const APP_VERSION = '2.2.0'
+export const APP_VERSION = '2.2.1'
 
 export const VERSION_HISTORY = [
+  {
+    version: '2.2.1',
+    date: '2026-07-27',
+    title: '캐릭터 레이어 설정 개선',
+    changes: [
+      '카구야 님은 고백받고 싶어 레이어와 후지와라 돌발 난입 설정을 개선했습니다.',
+    ],
+  },
   {
     version: '2.2.0',
     date: '2026-07-27',

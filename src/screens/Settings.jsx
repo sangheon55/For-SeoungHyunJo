@@ -19,6 +19,22 @@ export default function Settings() {
   const authState = useAuth()
   const [migration, setMigration] = useState({ phase: 'idle', counts: null, message: '' })
 
+  useEffect(() => {
+    if (
+      data.settings.kaguyaEnabled === false
+      && data.settings.fujiwaraInterruptEnabled !== false
+    ) {
+      update((d) => ({
+        ...d,
+        settings: { ...d.settings, fujiwaraInterruptEnabled: false },
+      }))
+    }
+  }, [
+    data.settings.kaguyaEnabled,
+    data.settings.fujiwaraInterruptEnabled,
+    update,
+  ])
+
   // 과목 추가 폼
   const [sName, setSName] = useState('')
   const [sCat, setSCat] = useState('전공')
@@ -414,9 +430,9 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* 캐릭터 레이어 */}
+      {/* 카구야 님은 고백받고 싶어 레이어 */}
       <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-title">🎀 캐릭터 레이어</div>
+        <div className="card-title">🎀 카구야 님은 고백받고 싶어 레이어</div>
         <div className="hint" style={{ marginBottom: 10 }}>
           타이머에는 카구야, 플래너에는 이이노, 통합 검색에는 하야사카 캐릭터와 상황별 대사를 표시합니다.
           이 설정은 모든 애니메이션 캐릭터에 함께 적용되며, 꺼도 기존 기능과 학습 기록에는 영향이 없습니다.
@@ -426,18 +442,37 @@ export default function Settings() {
             type="checkbox"
             className="checkbox"
             checked={data.settings.kaguyaEnabled !== false}
-            onChange={(e) =>
-              update((d) => ({ ...d, settings: { ...d.settings, kaguyaEnabled: e.target.checked } }))
-            }
+            onChange={(e) => {
+              const enabled = e.target.checked
+              update((d) => ({
+                ...d,
+                settings: {
+                  ...d.settings,
+                  kaguyaEnabled: enabled,
+                  ...(!enabled && { fujiwaraInterruptEnabled: false }),
+                },
+              }))
+            }}
           />
-          <span className="grow">캐릭터 레이어 사용</span>
+          <span className="grow">카구야 님은 고백받고 싶어 레이어 사용</span>
           <span className="hint">{data.settings.kaguyaEnabled !== false ? 'ON' : 'OFF'}</span>
         </label>
-        <label className="item" style={{ cursor: 'pointer', marginTop: 8 }}>
+        <label
+          className="item"
+          style={{
+            cursor: data.settings.kaguyaEnabled !== false ? 'pointer' : 'not-allowed',
+            marginTop: 8,
+            opacity: data.settings.kaguyaEnabled !== false ? 1 : 0.55,
+          }}
+        >
           <input
             type="checkbox"
             className="checkbox"
-            checked={data.settings.fujiwaraInterruptEnabled !== false}
+            checked={
+              data.settings.kaguyaEnabled !== false
+              && data.settings.fujiwaraInterruptEnabled !== false
+            }
+            disabled={data.settings.kaguyaEnabled === false}
             onChange={(e) =>
               update((d) => ({
                 ...d,
@@ -446,7 +481,12 @@ export default function Settings() {
             }
           />
           <span className="grow">후지와라 돌발 난입</span>
-          <span className="hint">{data.settings.fujiwaraInterruptEnabled !== false ? 'ON' : 'OFF'}</span>
+          <span className="hint">
+            {data.settings.kaguyaEnabled !== false
+              && data.settings.fujiwaraInterruptEnabled !== false
+              ? 'ON'
+              : 'OFF'}
+          </span>
         </label>
         <label className="item" style={{ cursor: 'pointer', marginTop: 8 }}>
           <input
